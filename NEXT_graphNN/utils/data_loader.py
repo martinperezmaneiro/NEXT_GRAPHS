@@ -212,12 +212,9 @@ def create_graph(file,
 def load_graph_data(fname):
     '''
     Quick load (without using the class) for graph saved data; it can be from a string or list of strings
-
     '''
-    if isinstance(fname, list):
-        dataset = [graph for path in fname for graph in torch.load(path)]
-    if isinstance(fname, str):
-        dataset = torch.load(fname)
+    fname = glob(fname)
+    dataset = [graph for path in fname for graph in torch.load(path)]
     return dataset
 
 def weights_loss(fname, label_type, nclass = 3, nevents = None):
