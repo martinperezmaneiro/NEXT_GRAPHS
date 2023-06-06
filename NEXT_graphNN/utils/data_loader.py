@@ -84,6 +84,10 @@ def graphDataset(file,
     for dat_id, event in df.groupby(id):
         event = event.reset_index(drop = True)
         graph_data = graphData(event, dat_id, features=features, label_n=label_n, max_distance=max_distance, coord_names=coord_names, directed = directed)
+        #to avoid graphs where edges don't exist
+        if graph_data.edge_index.numel() == 0:
+            continue
+
         dataset.append(graph_data)
     return dataset
 
@@ -214,7 +218,7 @@ def load_graph_data(fname):
     Quick load (without using the class) for graph saved data; it can be from a string or list of strings
     '''
     fname = glob(fname)
-    dataset = [graph for path in fname for graph in torch.load(path)]
+    dataset = [graph for path in fname for graph in torch.load(path) if graph.edge_index.numel() != 0]
     return dataset
 
 def weights_loss(fname, label_type, nclass = 3, nevents = None):

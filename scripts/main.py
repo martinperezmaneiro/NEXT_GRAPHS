@@ -40,7 +40,7 @@ def get_params(confname):
 
 if __name__ == '__main__':
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    print('Devie: {}'.format(device))
+    print('Device: {}'.format(device))
     
     torch.backends.cudnn.enables = True
     torch.backends.cudnn.benchmark = True
@@ -68,6 +68,7 @@ if __name__ == '__main__':
     print('Net constructed')
 
     dataset = load_graph_data(params.data_file)
+    #dataset = [g for g in dataset if g.edge_index.numel() != 0] ##this is a second check for non connected graphs
     train_data, valid_data, test_data = split_dataset(dataset, params.train_perc)
 
     if params.saved_weights:
