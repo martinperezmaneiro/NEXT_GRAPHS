@@ -38,7 +38,6 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     confname = args.confname
-    action = args.action
     params = get_params(confname)
 
     files = glob(params.tensorboard_dir + 'event.*')
