@@ -40,7 +40,7 @@ if __name__ == '__main__':
     confname = args.confname
     params = get_params(confname)
 
-    files = glob(params.tensorboard_dir + 'event.*')
+    files = glob(params.tensorboard_dir + 'events.*')
     for f in files:
         df = load_tensorboard_df(f)
         df.to_hdf(f.split('/')[-1] + '.h5', 'tensorboard')
