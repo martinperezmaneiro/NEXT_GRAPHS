@@ -217,7 +217,7 @@ def load_graph_data(fname):
     '''
     Quick load (without using the class) for graph saved data; it can be from a string or list of strings
     '''
-    fname = glob(fname)
+    fname = sorted(glob(fname), key = lambda x: int(x.split('_')[-2]) if x.split('_')[-2].isnumeric() else None)
     dataset = [graph for path in fname for graph in torch.load(path) if graph.edge_index.numel() != 0]
     return dataset
 
