@@ -46,7 +46,7 @@ if __name__ == '__main__':
         tname = f.split('/')[-1]
         fname = f.split('/')[-3]
         f = f.replace(tname, fname)
-        df.to_hdf('tb_' + f + '.h5', 'tensorboard')
+        df.to_hdf(f + '_tb.h5', 'tensorboard')
 
 
 
