@@ -43,6 +43,9 @@ if __name__ == '__main__':
     files = glob(params.tensorboard_dir + 'events.*')
     for f in files:
         df = load_tensorboard_df(f)
+        tname = f.split('/')[-1]
+        fname = f.split('/')[-3]
+        f = f.replace(tname, fname)
         df.to_hdf(f + '.h5', 'tensorboard')
 
 
