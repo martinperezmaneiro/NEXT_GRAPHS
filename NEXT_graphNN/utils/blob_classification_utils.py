@@ -27,7 +27,7 @@ def segmentation_blob_classification(orig_dataset_path, pred_dataset_path, thres
     events are classified as signal or background
     '''
     original_events = pd.read_hdf(orig_dataset_path, 'MCVoxels')
-    pred_events = pd.read_hdf(pred_dataset_path, 'VoxelsPred')
+    pred_events = pd.read_hdf(pred_dataset_path, 'VoxelPred')
 
     nblobs = np.array([])
     for idx, event_df in pred_events.groupby('dataset_id'):
