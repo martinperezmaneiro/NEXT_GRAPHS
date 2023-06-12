@@ -29,12 +29,19 @@ def segmentation_blob_classification(orig_dataset_path, pred_dataset_path, thres
     original_events = pd.read_hdf(orig_dataset_path, 'MCVoxels')
     pred_events = pd.read_hdf(pred_dataset_path, 'VoxelPred')
 
-    nblobs = np.array([])
+    nblobs = []
     for idx, event_df in pred_events.groupby('dataset_id'):
-        nblobs = np.append(nblobs, number_of_blobs(event_df, threshold, class_type = class_type, max_distance = max_distance))
+        nblobs.append({'dataset_id':idx, 'pred_class':number_of_blobs(event_df, threshold, class_type = class_type, max_distance = max_distance)})
+
+    df_nblobs = pd.DataFrame(nblobs)
 
     #this ==2 is decisive bc puts the ones with more than 2 blobs as bkg, still thinking about it
-    original_events = original_events.assign(pred_class = pd.Series(nblobs) == 2)
+    df_nblobs['pred_class'] = df_nblobs['pred_class'].apply(lambda x: x == 2)
+
+    #with this merge we forget about the events in the original dataset that were not feasible for graph training
+    #if we want to have them, we should add how = 'outer', but then be careful bc appear nans and cannot be casted as
+    #int in the next line! (set them as -1 for example, and then cast the int)
+    original_events = original_events.merge(df_nblobs, on = 'dataset_id')
 
     original_events.pred_class = original_events.pred_class.astype(int)
     return original_events

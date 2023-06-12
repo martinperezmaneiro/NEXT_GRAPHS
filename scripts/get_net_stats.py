@@ -36,7 +36,7 @@ if __name__ == "__main__":
         for dis in distances:
             print(round(th, 4), round(dis, 4))
             start_time = time()
-            eventInfo_pred = segmentation_blob_classification(orig_file, pred_file, th, nevents = nevents, max_distance = dis)
+            eventInfo_pred = segmentation_blob_classification(orig_file, pred_file, th, nevents = nevents, max_distance = dis)[['dataset_id', 'binclass', 'nblobs']].drop_duplicates().reset_index()
             acc, tpr, tnr = success_rates(eventInfo_pred['binclass'], eventInfo_pred['pred_class'])
             result_df = result_df.append(pd.DataFrame([[th, dis, acc, tpr, tnr]], columns = ['blobclass_th', 'blobcount_dis', 'acc', 'tpr', 'tnr']))
             print((time() - start_time) / 60, 'mins')
