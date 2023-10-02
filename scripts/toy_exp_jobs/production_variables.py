@@ -14,7 +14,7 @@ out_filename = "toy_exp_{num}.pt"
 #number of jobs to launch (max is 30 in ft3, but you can add any number of tasks per job
 #while it doesn't pass the time per job)
 queue_limit   = 30
-tasks_per_job = 20
+tasks_per_job = 10
 
 #directory of the job and config templates, write / at the end
 taskTemp_dir   = os.path.expandvars("/home/usc/ie/mpm/NEXT_graphs/templates/")

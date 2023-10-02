@@ -7,7 +7,7 @@ from itertools import combinations
 
 import torch
 from invisible_cities.core.configure  import configure
-from utils.toy_exp_utils import *
+from NEXT_graphNN.utils.toy_exp_utils import *
 
 if __name__ == "__main__":
 

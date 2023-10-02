@@ -40,7 +40,7 @@ if __name__ == "__main__":
         #Create file to write
         job = jobsdir + f"job_{batch + 1}.sh"
         with open(job, "x") as job_write:
-            job_write.write(job_file.format(jobname = str(batch + 1) + "_" + tag,
+            job_write.write(job_file.format(jobname = str(batch + 1) + "_toy",
                                             logfilename = logsdir + str(batch + 1) + ".log",
                                             errfilename = logsdir + str(batch + 1) + ".err",
                                             tasks_per_job = len(tasks_in_batch),
