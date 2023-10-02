@@ -108,8 +108,10 @@ def create_toy_dataset(init_id,
     dataset  = []
     # START GENERATING
     for i in range(nevents):
-        # Take the number of nodes
-        num_nodes = round(random.gauss(mean_nnodes, var_nnodes))
+        # Take the number of nodes (added while loop to ensure always positive number of nodes)
+        num_nodes = -1
+        while num_nodes < 0:
+            num_nodes = round(random.gauss(mean_nnodes, var_nnodes))
         # Create the graph to obtain edges
         track_graph = create_track_like_graph(num_nodes, min_edges_per_node, max_edges_per_node, max_neighbor_distance)
         # Decide if the track will be signal or bkg (also constitutes the binary label)
