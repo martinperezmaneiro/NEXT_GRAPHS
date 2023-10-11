@@ -79,7 +79,7 @@ if __name__ == '__main__':
     if action == 'train':
         if params.weight_loss is True:
             print('Calculating weights')
-            weights = torch.Tensor(weights_loss(params.train_file, params.labeltype, nclass = params.nclass)).to(device)
+            weights = torch.Tensor(weights_loss(train_data, params.labeltype, nclass = params.nclass, nevents=1000)).to(device)
             print('Weights are', weights)
         elif isinstance(params.weight_loss, list):
             weights = torch.Tensor(params.weight_loss).to(device)

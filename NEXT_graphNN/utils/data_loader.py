@@ -221,8 +221,8 @@ def load_graph_data(fname):
     dataset = [graph for path in fname for graph in torch.load(path) if graph.edge_index.numel() != 0]
     return dataset
 
-def weights_loss(fname, label_type, nclass = 3, nevents = None):
-    dataset = load_graph_data(fname)[:nevents]
+def weights_loss(data, label_type, nclass = 3, nevents = None):
+    dataset = data[:nevents]
     if label_type==LabelType.Segmentation:
         inv_freq = 1 / sum([np.bincount(graph.y.numpy().flatten(), minlength=nclass) for graph in dataset])
     elif label_type == LabelType.Classification:
