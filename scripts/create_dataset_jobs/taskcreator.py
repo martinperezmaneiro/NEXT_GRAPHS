@@ -36,8 +36,8 @@ if __name__ == "__main__":
         #create the config file to write the template on it
         config = confdir + "conf_{n}.conf".format(n = n)
         with open(config, "w") as config_write:
-            config_write.write(config_file.format(files_in = file_in, 
-                                                  file_out = file_out))
+            config_write.write(config_file.format(file_in = file_in, 
+                                                  fileout = file_out))
 
         #we create the commands to be written in the job file, such as the scripth path
         commands = "python {script_directory} {config_directory}".format(script_directory = scriptdir,
