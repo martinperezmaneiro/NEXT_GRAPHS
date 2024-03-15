@@ -1,3 +1,4 @@
+import re
 import random
 import itertools
 import numpy as np
@@ -23,67 +24,109 @@ class NetArchitecture(AutoNameEnumBase):
     GraphUNet = auto()
 
 
-def edge_index(event, max_distance = np.sqrt(3), coord_names = ['xbin', 'ybin', 'zbin'], directed = False):
+def edge_index(event, 
+               max_distance = np.sqrt(3), 
+               norm_features = True,
+               ener_name = 'ener', 
+               coord_names = ['xbin', 'ybin', 'zbin'], 
+               directed = False, 
+               fully_connected = False):
     ''' 
     Creates the edge index tensor, with shape [2, E] where E is the number of edges.
     It contains the index of the nodes that are connected by an edge. 
-    For directed graphs there is only a pair of nodes per edge, while for undirected the pair is repeated twice in 
-    different order, e.g.: 
-    ---> Directed edge:   [[3, 8]] (an edge between nodes 3 and 8)
-    ---> Undirected edge: [[3, 8], [8, 3]] (two edges between nodes 3 and 8 in both directions)
+    Also creates the edge features tensor, with shape [E, D] being D the number of features. In this case we add the distance, and a sort of gradient.
+    Also creates the edge weights tensor, with shape E: one weight assigned to each edge. In this case we use the inverse of the distance. 
     '''
+    def grad(ener, dis, i, j): return abs(ener[i] - ener[j]) / dis
+    def inve(dis): return 1 / dis
+
     coord = event[coord_names].T
-    edges = []
-    if directed: node_comb = itertools.combinations(coord, 2)
-    else: node_comb = itertools.permutations(coord, 2)
-    for i, j in node_comb:
+    ener  = event[ener_name]
+    ener = ener / sum(ener) if norm_features else ener
+    edges, edge_features, edge_weights = [], [], []
+    node_comb = itertools.combinations if directed else itertools.permutations
+    for i, j in node_comb(coord, 2):
         dis = np.linalg.norm(coord[i].values - coord[j].values)
-        if dis <= max_distance:
+        #append info for all edges if fully_connected, or if not, only the edges for the closest nodes
+        if fully_connected or dis <= max_distance:
             edges.append([i, j])
-    edges = torch.tensor(edges).T
-    return edges
+            edge_features.append([dis, grad(ener, dis, i, j)])
+            edge_weights.append(inve(dis))
+    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features), torch.tensor(edge_weights)
+    return edges, edge_features, edge_weights
 
 
-def graphData(event, data_id, features = ['energy'], label_n = ['segclass'], max_distance = np.sqrt(3), coord_names = ['xbin', 'ybin', 'zbin'], directed = False, simplify_segclass = False):
+def graphData(event, 
+              data_id, 
+              features = ['energy', 'nhits'], 
+              label_n = ['segclass'], 
+              norm_features = True, 
+              max_distance = np.sqrt(3), 
+              ener_name = 'energy', 
+              coord_names = ['xbin', 'ybin', 'zbin'], 
+              directed = False, 
+              fully_connected = False, 
+              simplify_segclass = False):
     '''
-    Transforms an event into a Data graph object which contains the edges (using edge_index function), the nodes with their
-    features, the true label and the number of nodes of the graph.
-
-    Also performs a simplification of the label if required, changing the neighbouring classes for regular classes 
-    (only applies for beersheba labelling)
+    Creates for an event the Data PyTorch geometric object with the edges, edge features (distances, 'gradient' with normalized energy), edge weights (inverse of distance),
+    node features (normalized energy and normalized number of hits per voxel), label, number of nodes, coords, dataset ID and binclass.
     '''
-    edges = edge_index(event, max_distance=max_distance, coord_names=coord_names, directed=directed)
+    event.reset_index(drop = True, inplace = True)
+    edges, edge_features, edge_weights = edge_index(event, 
+                                                    max_distance=max_distance, 
+                                                    norm_features = norm_features,
+                                                    ener_name=ener_name, 
+                                                    coord_names=coord_names, 
+                                                    directed=directed, 
+                                                    fully_connected=fully_connected)
     #nodes features, for now just the energy; the node itself is defined by its position
-    nodes = torch.tensor(event[features].values)
+    features = event[features]
+    features = features / features.sum() if norm_features else features
+    nodes = torch.tensor(features.values)
     #nodes segmentation label
     seg = event[label_n].values
     if simplify_segclass:
         label_map = {1:1, 2:2, 3:3, 4:1, 5:2, 6:3, 7:4}
         seg = np.array([label_map[i] for i in seg])
-
-    #Shifting the label segclass to start with 0
+    #we can try to add also the transformation just to have track + blob (+ ghost)
+    #shifting already the label below!!
     label = torch.tensor(seg - 1)
+    coords = torch.tensor(event[coord_names].values)
     bincl = event.binclass.unique()[0]
-    graph_data = Data(edge_index = edges, x = nodes, y = label, num_nodes = len(nodes), dataset_id = data_id, binclass = bincl)
+    graph_data = Data(x = nodes, edge_index = edges, edge_attr = edge_features, edge_weight = edge_weights, y = label, num_nodes = len(nodes), coords = coords, dataset_id = data_id, binclass = bincl)
     return graph_data
 
 def graphDataset(file, 
                  group = 'DATASET', 
                  table = 'BeershebaVoxels',
-                 id = 'dataset_id', 
-                 features = ['energy'], 
+                 id_name = 'dataset_id', 
+                 features = ['energy', 'nhits'], 
                  label_n = ['segclass'], 
+                 norm_features = True,
                  max_distance = np.sqrt(3), 
+                 ener_name = 'energy',
                  coord_names = ['xbin', 'ybin', 'zbin'], 
-                 directed = False):
+                 directed = False, 
+                 fully_connected = False, 
+                 simplify_segclass = False):
     '''
-    For a file, it creates a dataset with all the events in their graph form
+    For a file, it creates a dataset with all the events in their input to the GNN form
     '''
     df = dio.load_dst(file, group, table)
     dataset = []
-    for dat_id, event in df.groupby(id):
+    for dat_id, event in df.groupby(id_name):
         event = event.reset_index(drop = True)
-        graph_data = graphData(event, dat_id, features=features, label_n=label_n, max_distance=max_distance, coord_names=coord_names, directed = directed)
+        graph_data = graphData(event, 
+                               dat_id, 
+                               features=features, 
+                               label_n=label_n, 
+                               norm_features = norm_features, 
+                               max_distance=max_distance, 
+                               ener_name = ener_name, 
+                               coord_names=coord_names, 
+                               directed = directed, 
+                               fully_connected = fully_connected, 
+                               simplify_segclass = simplify_segclass)
         #to avoid graphs where edges don't exist
         if graph_data.edge_index.numel() == 0:
             continue
@@ -217,7 +260,7 @@ def load_graph_data(fname):
     '''
     Quick load (without using the class) for graph saved data; it can be from a string or list of strings
     '''
-    fname = sorted(glob(fname), key = lambda x: int(x.split('_')[-2]) if x.split('_')[-2].isnumeric() else None)
+    fname = sorted(glob(fname), key = lambda x: int(re.findall(r'\d+', x)[-1]))
     dataset = [graph for path in fname for graph in torch.load(path) if graph.edge_index.numel() != 0]
     return dataset
 
