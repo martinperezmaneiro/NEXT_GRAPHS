@@ -78,7 +78,7 @@ proddir, taskdir, jobsdir, confdir, logsdir = create_out_dirs()
 #takes all the .h5 files in the specified indir. we will make a loop on them, but as I
 #want to grab all the files with the same cut, in the job creator script I will assure that
 #once one cut job/config is created, no other configs are created
-files_in = glob.glob(indir + "/*.h5") #para que me haga todo poner *.h5 al final
+files_in = glob.glob(indir + "/" + in_filename.format(num = "*", tag = tag)) #para que me haga todo poner *.h5 al final
 for file_in in files_in: check_filename_structure(file_in)
 #sorts all the files by number
 files_in = sorted(files_in, key = get_file_number)
