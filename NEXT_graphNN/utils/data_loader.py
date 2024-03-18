@@ -108,7 +108,8 @@ def graphDataset(file,
                  coord_names = ['xbin', 'ybin', 'zbin'], 
                  directed = False, 
                  fully_connected = False, 
-                 simplify_segclass = False):
+                 simplify_segclass = False,
+                 get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2])):
     '''
     For a file, it creates a dataset with all the events in their input to the GNN form
     '''
@@ -130,7 +131,8 @@ def graphDataset(file,
         #to avoid graphs where edges don't exist
         if graph_data.edge_index.numel() == 0:
             continue
-
+        fnum = get_fnum_function(file)
+        graph_data.fnum = fnum
         dataset.append(graph_data)
     return dataset
 

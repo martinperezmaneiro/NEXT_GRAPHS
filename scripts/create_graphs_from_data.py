@@ -3,6 +3,7 @@ import sys
 import torch
 
 from invisible_cities.core.configure  import configure
+from create_dataset_jobs.production_variables import get_file_number
 from NEXT_graphNN.utils.data_loader import graphDataset
 
 if __name__ == "__main__":
@@ -26,7 +27,8 @@ if __name__ == "__main__":
                            coord_names       = config.coord_names, 
                            directed          = config.directed, 
                            fully_connected   = config.fully_connected, 
-                           simplify_segclass = config.simplify_segclass)
+                           simplify_segclass = config.simplify_segclass,
+                           get_fnum_function = get_file_number)
     
     torch.save(dataset, fileout)
 
