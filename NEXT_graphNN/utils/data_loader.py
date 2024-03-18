@@ -114,6 +114,7 @@ def graphDataset(file,
     For a file, it creates a dataset with all the events in their input to the GNN form
     '''
     df = dio.load_dst(file, group, table)
+    fnum = get_fnum_function(file)
     dataset = []
     for dat_id, event in df.groupby(id_name):
         event = event.reset_index(drop = True)
@@ -131,7 +132,6 @@ def graphDataset(file,
         #to avoid graphs where edges don't exist
         if graph_data.edge_index.numel() == 0:
             continue
-        fnum = get_fnum_function(file)
         graph_data.fnum = fnum
         dataset.append(graph_data)
     return dataset
