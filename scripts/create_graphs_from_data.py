@@ -13,6 +13,9 @@ if __name__ == "__main__":
     file_in = os.path.expandvars(config.file_in)
     fileout = os.path.expandvars(config.fileout)
     
+    if config.compression:
+        fileout += '.gz'
+
     if os.path.isfile(fileout):
         raise Exception('output file exist, please remove it manually')
     
@@ -31,7 +34,7 @@ if __name__ == "__main__":
                            simplify_segclass = config.simplify_segclass,
                            get_fnum_function = get_file_number)
     if config.compression:
-        with gzip.open(fileout + '.gz', 'wb') as fout:
+        with gzip.open(fileout, 'wb') as fout:
             torch.save(dataset, fout)
     else: torch.save(dataset, fileout)
 
