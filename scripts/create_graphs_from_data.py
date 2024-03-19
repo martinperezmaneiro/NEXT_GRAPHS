@@ -1,5 +1,6 @@
 import os
 import sys
+import gzip
 import torch
 
 from invisible_cities.core.configure  import configure
@@ -29,8 +30,10 @@ if __name__ == "__main__":
                            fully_connected   = config.fully_connected, 
                            simplify_segclass = config.simplify_segclass,
                            get_fnum_function = get_file_number)
-    
-    torch.save(dataset, fileout)
+    if config.compression:
+        with gzip.open(fileout + '.gz', 'wb') as fout:
+            torch.save(dataset, fout)
+    else: torch.save(dataset, fileout)
 
 
 
