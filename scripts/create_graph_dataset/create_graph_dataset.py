@@ -32,7 +32,7 @@ nevents_per_file_1eroi = 50
 dataset_proportion = [0.8, 0.1]
 
 #sorting function
-sort_files = lambda data_type: sorted(glob(basedir.format(p = p, dt = data_type, f = infile_structure)), key = lambda x: (x.split('/')[-4], int(x.split('_')[-2])))
+sort_files = lambda data_type: sorted(glob.glob(basedir.format(p = p, dt = data_type, f = infile_structure)), key = lambda x: (x.split('/')[-4], int(x.split('_')[-2])))
 
 if wanted_nevents_per_dt:
     #numero de ficheros necesarios para cada dt para tener el numero de eventos anterior
@@ -46,7 +46,7 @@ if wanted_nevents_per_dt:
     #ficheros totales, con 2 veces el numero de eventos aprox por dt
     files = files_0nubb + files_1eroi
 else:
-    files = sorted(glob(basedir.format(p = p, dt = '*', f = infile_structure)), key = lambda x: (x.split('/')[-4], int(x.split('_')[-2])))
+    files = sort_files('*')
 
 
 def load_graph_data(fname):
@@ -67,6 +67,8 @@ def load_graph_data_compressed(fname):
         with gzip.open(fname, 'rb') as f:
             dataset.extend(torch.load(f))
     return dataset
+
+print('Number of files: ', len(files))
 
 #load the whole dataset
 if compressed:
