@@ -86,7 +86,7 @@ assert train_size + val_size + test_size == dataset_len
 # Split the dataset
 split_dataset = random_split(dataset, [train_size, val_size, test_size])
 
-fileout = outfile_structure + outdir
+fileout = outdir + outfile_structure
 
 #save the dataset
 torch.save(split_dataset, fileout.format(p = p))
