@@ -30,7 +30,8 @@ def edge_index(event,
                ener_name = 'ener', 
                coord_names = ['xbin', 'ybin', 'zbin'], 
                directed = False, 
-               fully_connected = False):
+               fully_connected = False, 
+               torch_dtype = torch.float):
     ''' 
     Creates the edge index tensor, with shape [2, E] where E is the number of edges.
     It contains the index of the nodes that are connected by an edge. 
@@ -52,7 +53,7 @@ def edge_index(event,
             edges.append([i, j])
             edge_features.append([dis, grad(ener, dis, i, j)])
             edge_weights.append(inve(dis))
-    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features), torch.tensor(edge_weights)
+    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
     return edges, edge_features, edge_weights
 
 
@@ -66,7 +67,8 @@ def graphData(event,
               coord_names = ['xbin', 'ybin', 'zbin'], 
               directed = False, 
               fully_connected = False, 
-              simplify_segclass = False):
+              simplify_segclass = False, 
+              torch_dtype = torch.float):
     '''
     Creates for an event the Data PyTorch geometric object with the edges, edge features (distances, 'gradient' with normalized energy), edge weights (inverse of distance),
     node features (normalized energy and normalized number of hits per voxel), label, number of nodes, coords, dataset ID and binclass.
@@ -78,11 +80,12 @@ def graphData(event,
                                                     ener_name=ener_name, 
                                                     coord_names=coord_names, 
                                                     directed=directed, 
-                                                    fully_connected=fully_connected)
+                                                    fully_connected=fully_connected, 
+                                                    torch_dtype = torch_dtype)
     #nodes features, for now just the energy; the node itself is defined by its position
     features = event[features]
     features = features / features.sum() if norm_features else features
-    nodes = torch.tensor(features.values)
+    nodes = torch.tensor(features.values, dtype = torch_dtype)
     #nodes segmentation label
     seg = event[label_n].values
     if simplify_segclass:
@@ -109,7 +112,8 @@ def graphDataset(file,
                  directed = False, 
                  fully_connected = False, 
                  simplify_segclass = False,
-                 get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2])):
+                 get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2]), 
+                 torch_dtype = torch.float):
     '''
     For a file, it creates a dataset with all the events in their input to the GNN form
     '''
@@ -128,7 +132,8 @@ def graphDataset(file,
                                coord_names=coord_names, 
                                directed = directed, 
                                fully_connected = fully_connected, 
-                               simplify_segclass = simplify_segclass)
+                               simplify_segclass = simplify_segclass, 
+                               torch_dtype = torch_dtype)
         #to avoid graphs where edges don't exist
         if graph_data.edge_index.numel() == 0:
             continue

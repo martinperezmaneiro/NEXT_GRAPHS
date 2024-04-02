@@ -15,6 +15,11 @@ if __name__ == "__main__":
     
     if config.compression:
         fileout += '.gz'
+    
+    if config.tensor_type == 'float':
+        torch_dtype = torch.float
+    if config.tensor_type == 'double':
+        torch_dtype = torch.double
 
     if os.path.isfile(fileout):
         raise Exception('output file exist, please remove it manually')
@@ -32,7 +37,8 @@ if __name__ == "__main__":
                            directed          = config.directed, 
                            fully_connected   = config.fully_connected, 
                            simplify_segclass = config.simplify_segclass,
-                           get_fnum_function = get_file_number)
+                           get_fnum_function = get_file_number, 
+                           torch_dtype       = torch_dtype)
     if config.compression:
         with gzip.open(fileout, 'wb') as fout:
             torch.save(dataset, fout)
