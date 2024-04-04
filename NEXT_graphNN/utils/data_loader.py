@@ -59,7 +59,7 @@ def edge_index(event,
 
 def graphData(event, 
               data_id, 
-              features = ['energy', 'nhits'], 
+              feature_n = ['energy', 'nhits'], 
               label_n = ['segclass'], 
               norm_features = True, 
               max_distance = np.sqrt(3), 
@@ -73,6 +73,11 @@ def graphData(event,
     Creates for an event the Data PyTorch geometric object with the edges, edge features (distances, 'gradient' with normalized energy), edge weights (inverse of distance),
     node features (normalized energy and normalized number of hits per voxel), label, number of nodes, coords, dataset ID and binclass.
     '''
+    #a bit hard coded this part but no worries for now
+    def get_cloud_ener_nhits(event, norm_features = True):
+        cloud_feat = event.merge(event.groupby('cloud').nhits.sum().rename('cloud_nhits'), on = 'cloud')[['cloud_ener', 'cloud_nhits']]
+        return cloud_feat.divide(event[['ener', 'nhits']].sum().values, axis = 1) if norm_features else cloud_feat
+    
     event.reset_index(drop = True, inplace = True)
     edges, edge_features, edge_weights = edge_index(event, 
                                                     max_distance=max_distance, 
@@ -82,10 +87,13 @@ def graphData(event,
                                                     directed=directed, 
                                                     fully_connected=fully_connected, 
                                                     torch_dtype = torch_dtype)
-    #nodes features, for now just the energy; the node itself is defined by its position
-    features = event[features]
+    #nvoxel features for the nodes
+    features = event[feature_n]
     features = features / features.sum() if norm_features else features
-    nodes = torch.tensor(features.values, dtype = torch_dtype)
+    #cloud features for the nodes
+    cloud_feat = get_cloud_ener_nhits(event, norm_features = norm_features)
+    #create the node features tensor joining both voxel and cloud features
+    nodes = torch.tensor(pd.concat([features, cloud_feat], axis = 1).values, dtype = torch_dtype)
     #nodes segmentation label
     seg = event[label_n].values
     if simplify_segclass:
@@ -103,7 +111,7 @@ def graphDataset(file,
                  group = 'DATASET', 
                  table = 'BeershebaVoxels',
                  id_name = 'dataset_id', 
-                 features = ['energy', 'nhits'], 
+                 feature_n = ['energy', 'nhits'], 
                  label_n = ['segclass'], 
                  norm_features = True,
                  max_distance = np.sqrt(3), 
@@ -124,7 +132,7 @@ def graphDataset(file,
         event = event.reset_index(drop = True)
         graph_data = graphData(event, 
                                dat_id, 
-                               features=features, 
+                               feature_n=feature_n, 
                                label_n=label_n, 
                                norm_features = norm_features, 
                                max_distance=max_distance, 

@@ -28,7 +28,7 @@ if __name__ == "__main__":
                            group             = config.group, 
                            table             = config.table,
                            id_name           = config.id_name, 
-                           features          = config.features, 
+                           feature_n         = config.features, 
                            label_n           = config.label_n, 
                            norm_features     = config.norm_features,
                            max_distance      = config.max_distance, 
