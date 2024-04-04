@@ -75,7 +75,7 @@ def graphData(event,
     '''
     #a bit hard coded this part but no worries for now
     def get_cloud_ener_nhits(event, norm_features = True):
-        cloud_feat = event.merge(event.groupby('cloud').nhits.sum().rename('cloud_nhits'), on = 'cloud')[['cloud_ener', 'cloud_nhits']]
+        cloud_feat = event.merge(event.groupby('cloud').nhits.sum().rename('cloud_nhits'), left_on = 'cloud', how = 'left', right_index = True)[['cloud_ener', 'cloud_nhits']]
         return cloud_feat.divide(event[['ener', 'nhits']].sum().values, axis = 1) if norm_features else cloud_feat
     
     event.reset_index(drop = True, inplace = True)
@@ -93,7 +93,7 @@ def graphData(event,
     #cloud features for the nodes
     cloud_feat = get_cloud_ener_nhits(event, norm_features = norm_features)
     #create the node features tensor joining both voxel and cloud features
-    nodes = torch.tensor(pd.concat([features, cloud_feat], axis = 1).values, dtype = torch_dtype)
+    nodes = torch.tensor(features.join(cloud_feat).values, dtype = torch_dtype)
     #nodes segmentation label
     seg = event[label_n].values
     if simplify_segclass:
