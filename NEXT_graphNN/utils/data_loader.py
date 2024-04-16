@@ -21,7 +21,9 @@ class LabelType(AutoNameEnumBase):
     Segmentation   = auto()
 
 class NetArchitecture(AutoNameEnumBase):
-    GraphUNet = auto()
+    GCNClass     = auto()
+    PoolGCNClass = auto()
+    GraphUNet    = auto()
 
 
 def edge_index(event, 
@@ -149,6 +151,7 @@ def graphDataset(file,
         dataset.append(graph_data)
     return dataset
 
+
 # def create_idx_split(dataset, train_perc):
 #     '''
 #     Divides the whole dataset into train, validation and test data. Picks a certain percentage (the majority) for the 
@@ -163,122 +166,146 @@ def graphDataset(file,
 #     idx_split = {'train':train_data, 'valid':valid_data, 'test':test_data}
 #     return idx_split
 
-def split_dataset(dataset, train_perc):
-    '''
-    Divides the whole dataset into train, validation and test data. Picks a certain percentage (the majority) for the 
-    train batch, and the remaining is divided equally for validation and test.
-    '''
-    valid_perc = (1 - train_perc) / 2
-    nevents = len(dataset)
-    train_data = dataset[:int(nevents * train_perc)]
-    valid_data = dataset[int(nevents * train_perc):int(nevents * (train_perc + valid_perc))]
-    test_data  = dataset[int(nevents * (train_perc + valid_perc)):]
-    return train_data, valid_data, test_data
+# def split_dataset(dataset, train_perc):
+#     '''
+#     Divides the whole dataset into train, validation and test data. Picks a certain percentage (the majority) for the 
+#     train batch, and the remaining is divided equally for validation and test.
+#     '''
+#     valid_perc = (1 - train_perc) / 2
+#     nevents = len(dataset)
+#     train_data = dataset[:int(nevents * train_perc)]
+#     valid_data = dataset[int(nevents * train_perc):int(nevents * (train_perc + valid_perc))]
+#     test_data  = dataset[int(nevents * (train_perc + valid_perc)):]
+#     return train_data, valid_data, test_data
 
-class dataset(Dataset):
-    '''
-    Dataset class to create/pick the graph data from labelled files
-    '''
-    def __init__(self, root, tag = '0nubb', transform=None, pre_transform=None, pre_filter=None, directed = False):
-        self.sort = lambda x: int(x.split('_')[-2])
-        self.tag = tag
-        self.directed = directed
-        super().__init__(root, transform, pre_transform, pre_filter)
+# class dataset(Dataset):
+#     '''
+#     Dataset class to create/pick the graph data from labelled files
+#     '''
+#     def __init__(self, root, tag = '0nubb', transform=None, pre_transform=None, pre_filter=None, directed = False):
+#         self.sort = lambda x: int(x.split('_')[-2])
+#         self.tag = tag
+#         self.directed = directed
+#         super().__init__(root, transform, pre_transform, pre_filter)
         
-    @property
-    def raw_file_names(self):
-        ''' 
-        Returns a list of the raw files in order (supossing they are beersheba labelled files that have the structure beersheba_label_N_tag.h5)
-        '''
-        rfiles = [i.split('/')[-1] for i in glob(self.raw_dir + '/*_{}.h5'.format(self.tag))]
-        return sorted(rfiles, key = self.sort)
+#     @property
+#     def raw_file_names(self):
+#         ''' 
+#         Returns a list of the raw files in order (supossing they are beersheba labelled files that have the structure beersheba_label_N_tag.h5)
+#         '''
+#         rfiles = [i.split('/')[-1] for i in glob(self.raw_dir + '/*_{}.h5'.format(self.tag))]
+#         return sorted(rfiles, key = self.sort)
 
-    @property
-    def processed_file_names(self):
-        '''
-        Returns a list of the processed files in order (supossing they are stored tensors with the structure data_N.pt)
-        '''
-        pfiles = [i.split('/')[-1] for i in glob(self.processed_dir + '/data_*_{}.pt'.format(self.tag))]
-        return sorted(pfiles, key = self.sort)
+#     @property
+#     def processed_file_names(self):
+#         '''
+#         Returns a list of the processed files in order (supossing they are stored tensors with the structure data_N.pt)
+#         '''
+#         pfiles = [i.split('/')[-1] for i in glob(self.processed_dir + '/data_*_{}.pt'.format(self.tag))]
+#         return sorted(pfiles, key = self.sort)
     
-    def process(self):
-        makedirs(self.processed_dir)
-        already_processed = [self.sort(i) for i in self.processed_file_names]
-        for raw_path in self.raw_paths:
-            idx = self.sort(raw_path)
-            if np.isin(idx, already_processed):
-                #to avoid processing already processed files
-                continue
-            data = graphDataset(raw_path, directed=self.directed)
+#     def process(self):
+#         makedirs(self.processed_dir)
+#         already_processed = [self.sort(i) for i in self.processed_file_names]
+#         for raw_path in self.raw_paths:
+#             idx = self.sort(raw_path)
+#             if np.isin(idx, already_processed):
+#                 #to avoid processing already processed files
+#                 continue
+#             data = graphDataset(raw_path, directed=self.directed)
 
-            #if self.pre_filter is not None and not self.pre_filter(data):
-            #    continue
+#             #if self.pre_filter is not None and not self.pre_filter(data):
+#             #    continue
 
-            #if self.pre_transform is not None:
-            #    data = self.pre_transform(data)
+#             #if self.pre_transform is not None:
+#             #    data = self.pre_transform(data)
 
-            torch.save(data, osp.join(self.processed_dir, f'data_{idx}_{self.tag}.pt'))
+#             torch.save(data, osp.join(self.processed_dir, f'data_{idx}_{self.tag}.pt'))
         
 
-    def len(self):
-        return len(self.processed_file_names)
+#     def len(self):
+#         return len(self.processed_file_names)
 
-    def get(self, idx):
-        data = torch.load(osp.join(self.processed_dir, f'data_{idx}_{self.tag}.pt'))
-        return data
+#     def get(self, idx):
+#         data = torch.load(osp.join(self.processed_dir, f'data_{idx}_{self.tag}.pt'))
+#         return data
 
-    def join(self):
-        #print('Joining ', self.processed_file_names)
-        dataset = []
-        for processed_path in self.processed_paths:
-            dataset += torch.load(processed_path)
-        return dataset
+#     def join(self):
+#         #print('Joining ', self.processed_file_names)
+#         dataset = []
+#         for processed_path in self.processed_paths:
+#             dataset += torch.load(processed_path)
+#         return dataset
 
 
-def create_graph(file, 
-                 outfile,
-                 nevents_per_file = 200,
-                 table = 'MCVoxels', 
-                 id = 'dataset_id', 
-                 features = ['ener'], 
-                 label_n = ['segclass'], 
-                 max_distance = np.sqrt(3), 
-                 coord_names = ['x', 'y', 'z'], 
-                 directed = False, 
-                 simplify_segclass = False):
-    '''
-    Create the graph data from a big labelled file (as the mixed files I create)
-    '''
+# def create_graph(file, 
+#                  outfile,
+#                  nevents_per_file = 200,
+#                  table = 'MCVoxels', 
+#                  id = 'dataset_id', 
+#                  features = ['ener'], 
+#                  label_n = ['segclass'], 
+#                  max_distance = np.sqrt(3), 
+#                  coord_names = ['x', 'y', 'z'], 
+#                  directed = False, 
+#                  simplify_segclass = False):
+#     '''
+#     Create the graph data from a big labelled file (as the mixed files I create)
+#     '''
 
-    def save_file(dat_id, nevents_per_file, dataset, outfile):
-        start_id = (dat_id + 1) - nevents_per_file
-        final_id = dat_id
-        torch.save(dataset, osp.join(outfile, f'data_{start_id}_{final_id}.pt'))
+#     def save_file(dat_id, nevents_per_file, dataset, outfile):
+#         start_id = (dat_id + 1) - nevents_per_file
+#         final_id = dat_id
+#         torch.save(dataset, osp.join(outfile, f'data_{start_id}_{final_id}.pt'))
     
-    df = pd.read_hdf(file, table)
-    dataset = []
-    for dat_id, event in df.groupby(id):        
-        event = event.reset_index(drop = True)
-        ## maybe here apply the fiducial cut + energy normalization (with flags of course: an if instance with a continue)
-        ## always before the graphData where the graph object is created
-        graph_data = graphData(event, dat_id, features=features, label_n=label_n, max_distance=max_distance, coord_names=coord_names, directed = directed, simplify_segclass = simplify_segclass)
-        dataset.append(graph_data)
+#     df = pd.read_hdf(file, table)
+#     dataset = []
+#     for dat_id, event in df.groupby(id):        
+#         event = event.reset_index(drop = True)
+#         ## maybe here apply the fiducial cut + energy normalization (with flags of course: an if instance with a continue)
+#         ## always before the graphData where the graph object is created
+#         graph_data = graphData(event, dat_id, features=features, label_n=label_n, max_distance=max_distance, coord_names=coord_names, directed = directed, simplify_segclass = simplify_segclass)
+#         dataset.append(graph_data)
         
-        if (dat_id + 1) % nevents_per_file == 0:
-            save_file(dat_id, nevents_per_file, dataset, outfile)
-            dataset = []
+#         if (dat_id + 1) % nevents_per_file == 0:
+#             save_file(dat_id, nevents_per_file, dataset, outfile)
+#             dataset = []
 
-    save_file(dat_id, nevents_per_file, dataset, outfile)
+#     save_file(dat_id, nevents_per_file, dataset, outfile)
 
 
-def load_graph_data(fname):
+# def load_graph_data(fname):
+#     '''
+#     Quick load (without using the class) for graph saved data; it can be from a string or list of strings
+#     '''
+#     fname = sorted(glob(fname), key = lambda x: int(re.findall(r'\d+', x)[-1]))
+#     dataset = [graph for path in fname for graph in torch.load(path) if graph.edge_index.numel() != 0]
+#     return dataset
+
+def edge_tensor(*args):
     '''
-    Quick load (without using the class) for graph saved data; it can be from a string or list of strings
+    Function to join edge_attr and edge_weight if the PyTorch layer only takes one and it is only
+    for deleting some (like in TopKPooling, where I've found that it only takes edge_attr as input
+    but doesn't do anything to it more than deleting some connections, so I join both just to delete
+    also the weight tensor; if the function returned a mask I'd use that better, but...)
+    Also, if a joined tensor (previously returned by this function) is given, it splits again
+    into the attr and weights.
     '''
-    fname = sorted(glob(fname), key = lambda x: int(re.findall(r'\d+', x)[-1]))
-    dataset = [graph for path in fname for graph in torch.load(path) if graph.edge_index.numel() != 0]
-    return dataset
-
+    if len(args) == 1: 
+        tensor = args[0]
+        if isinstance(tensor, torch.Tensor):
+            return tensor[:, :2], tensor[:, -1]
+        else:
+            raise ValueError("Input should be a tensor.")
+    elif len(args) == 2:  
+        tensor1, tensor2 = args
+        if isinstance(tensor1, torch.Tensor) and isinstance(tensor2, torch.Tensor):
+            return torch.cat((tensor1, tensor2.unsqueeze(1)), dim=1)
+        else:
+            raise ValueError("Both inputs should be tensors.")
+    else:
+        raise ValueError("Expected either 1 or 2 tensors as input.")
+    
 def weights_loss(data, label_type, nclass = 3, nevents = None):
     dataset = data[:nevents]
     if label_type==LabelType.Segmentation:

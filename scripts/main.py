@@ -8,9 +8,10 @@ import pandas as pd
 
 from argparse import ArgumentParser, Namespace
 
-from NEXT_graphNN.utils.data_loader import LabelType, NetArchitecture, weights_loss, load_graph_data, split_dataset
+from NEXT_graphNN.utils.data_loader import LabelType, NetArchitecture, weights_loss
 from NEXT_graphNN.utils.train_utils import train_net, predict_gen
 
+from NEXT_graphNN.networks.architectures import GCNClass, PoolGCNClass
 from torch_geometric.nn.models import GraphUNet
 
 def is_file(parser, arg):
@@ -57,23 +58,28 @@ if __name__ == '__main__':
     action = args.action
     params = get_params(confname)
 
+    if params.netarch == NetArchitecture.GCNClass:
+        model = GCNClass(params.init_features, 
+                         params.nclass, 
+                         params.nconv, 
+                         mult_feat_per_conv = params.mult_feat_per_conv, 
+                         dropout_prob = params.dropout_prob).to(device)
+        
     if params.netarch == NetArchitecture.GraphUNet:
-        net = GraphUNet(params.init_features, 
-                        params.hidden_dim,
-                        params.nclass, 
-                        params.depth,
-                        params.pool_ratio).to(device)
-        model_uses_batch = True
+        model = GraphUNet(params.init_features, 
+                          params.hidden_dim,
+                          params.nclass, 
+                          params.depth,
+                          params.pool_ratio).to(device)
     
     print('Net constructed')
 
-    dataset = load_graph_data(params.data_file)
-    #dataset = [g for g in dataset if g.edge_index.numel() != 0] ##this is a second check for non connected graphs
-    train_data, valid_data, test_data = split_dataset(dataset, params.train_perc)
+    dataset = torch.load(params.data_file)
+    train_data, valid_data, test_data = dataset
 
     if params.saved_weights:
         dct_weights = torch.load(params.saved_weights)['state_dict']
-        net.load_state_dict(dct_weights, strict = False)
+        model.load_state_dict(dct_weights, strict = False)
         print('Weights loaded')
 
     if action == 'train':
@@ -89,34 +95,34 @@ if __name__ == '__main__':
         if params.LossType == 'CrossEntropyLoss':
             criterion = torch.nn.CrossEntropyLoss(weight = weights)
 
-        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, net.parameters()),
+        optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
                                      lr = params.lr,
                                      betas = params.betas,
                                      eps = params.eps,
                                      weight_decay = params.weight_decay)
         
-        train_net(nepoch = params.nepoch,
-                  train_data = train_data,
-                  valid_data = valid_data,
+        train_net(nepoch           = params.nepoch,
+                  train_dataset    = train_data,
+                  valid_dataset    = valid_data,
                   train_batch_size = params.train_batch,
                   valid_batch_size = params.valid_batch,
-                  net = net,
-                  device = device,
-                  optimizer = optimizer,
-                  criterion = criterion,
-                  label_type = params.labeltype,
-                  nclass =params.nclass,
-                  model_uses_batch = model_uses_batch,
-                  checkpoint_dir  = params.checkpoint_dir,
-                  tensorboard_dir = params.tensorboard_dir,
-                  num_workers = params.num_workers)
+                  num_workers      = params.num_workers,
+                  model            = model,
+                  device           = device,
+                  optimizer        = optimizer,
+                  criterion        = criterion,
+                  checkpoint_dir   = params.checkpoint_dir,
+                  tensorboard_dir  = params.tensorboard_dir,
+                  label_type       = params.labeltype,
+                  nclass           = params.nclass)
     
     if action == 'predict':
         pred = predict_gen(test_data, 
-                           net, 
-                           params.test_batch, 
-                           device, model_uses_batch, 
-                           params.labeltype)
+                           model, 
+                           params.pred_batch, 
+                           device, 
+                           label_type = params.labeltype, 
+                           nclass     = params.nclass)
         coorname = ['xbin', 'ybin', 'zbin']
         outfile = params.out_file
 
@@ -135,7 +141,7 @@ if __name__ == '__main__':
                 df = pd.DataFrame(dct)
                 df.to_hdf(outfile, tname, append=True)
         #Finally we sort the output dataframe 
-        df = pd.read_hdf(outfile, tname).sort_values(['dataset_id'] + coorname)
+        df = pd.read_hdf(outfile, tname).sort_values(['file_id', 'dataset_id'])
         os.remove(outfile)
         df.to_hdf(outfile, tname)
 

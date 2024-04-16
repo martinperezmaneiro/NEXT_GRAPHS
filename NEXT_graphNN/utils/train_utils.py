@@ -7,134 +7,138 @@ from torch.utils.tensorboard import SummaryWriter
 
 from .data_loader import LabelType
 
-def accuracy(true, pred, **kwrgs):
-    acc = sum(true == pred) / len(true)
-    return acc
+class Metrics():
+    def __init__(self, labeltype, nclass = 3):
+        super(Metrics, self).__init__()
+        '''
+        Here there are the different definitions of metrics, and which label, function and value container are used.
+        '''
 
+        def accuracy(true, pred):
+            acc = sum(true == pred) / len(true)
+            return acc
 
-def IoU(true, pred, nclass = 3):
-    """
-        Intersection over union is a metric for semantic segmentation.
-        It returns a IoU value for each class of our input tensors/arrays.
-    """
-    eps = sys.float_info.epsilon
-    confusion_matrix = np.zeros((nclass, nclass))
+        def IoU(true, pred, nclass = nclass):
+            """
+            Intersection over union is a metric for semantic segmentation.
+            It returns a IoU value for each class of our input tensors/arrays.
+            It is inside the init of the class so that we have already the desired
+            nclass from the moment we create the class
+            """
+            eps = sys.float_info.epsilon
+            confusion_matrix = np.zeros((nclass, nclass))
 
-    for i in range(len(true)):
-        confusion_matrix[true[i]][pred[i]] += 1
+            for i in range(len(true)):
+                confusion_matrix[true[i]][pred[i]] += 1
 
-    IoU = []
-    for i in range(nclass):
-        IoU.append((confusion_matrix[i, i] + eps) / (sum(confusion_matrix[:, i]) + sum(confusion_matrix[i, :]) - confusion_matrix[i, i] + eps))
-    return np.array(IoU)
+            iou = []
+            for i in range(nclass):
+                iou.append((confusion_matrix[i, i] + eps) / (sum(confusion_matrix[:, i]) + sum(confusion_matrix[i, :]) - confusion_matrix[i, i] + eps))
+            return np.array(iou)
+        
+        if labeltype == LabelType.Classification:
+            self.label_name = 'binclass'
+            self.met_epoch  = 0
+            self.metric_fn  = accuracy
 
-def metrics_selector(label_type, nclass):
-    if label_type == LabelType.Classification:
-        metric_fn = accuracy
-        met_epoch = 0
-    elif label_type == LabelType.Segmentation:
-        metric_fn = IoU
-        met_epoch = np.zeros(nclass)
-    return metric_fn, met_epoch
+        elif labeltype == LabelType.Segmentation:
+            self.label_name = 'y'
+            self.met_epoch  = np.zeros(nclass)            
+            self.metric_fn  = IoU
     
 
-def train_one_epoch(epoch_id, model, loader, device, optimizer, loss_fn, label_type, nclass = 4, model_uses_batch = True):
-    '''
-    Train the model with all the data once (an epoch)
-    '''
+def train_one_epoch(epoch_id, 
+                    model, 
+                    loader, 
+                    device, 
+                    optimizer, 
+                    loss_fn, 
+                    label_type = LabelType.Classification, 
+                    nclass = 2):
     # Tell the model it's going to train
     model.train()
-
+    # Initialize the loss value container 
     loss_epoch = 0
-    metric_fn, met_epoch = metrics_selector(label_type, nclass)
+    # Pick the desired metrics (kind of label, value container and function)
+    metrics = Metrics(label_type, nclass = nclass)
+    label_name, met_epoch, metric_fn = metrics.label_name, metrics.met_epoch, metrics.metric_fn
 
     # Iterate for the batches in the data loader
     for batch in loader:
-        # Pass the batch to device (cuda)
+        # Pass the batch to desired device (cpu/cuda)
         batch = batch.to(device)
-
-        # Zero grad the optimizer
+        # 1. Zero grad the optimizer
         optimizer.zero_grad()
-
-        # Pass the data to the model
-        if model_uses_batch:
-            out = model.forward(batch.x.type(torch.float), batch.edge_index, batch.batch) 
-        else:
-            out = model.forward(batch.x.type(torch.float), batch.edge_index)
-
-        # Now we pass the output and the labels to the loss function
-        # We will use nll or cross entropy loss
-        # These losses will need input (N, C) target (N); being C = num of classes, N = batch size
-        
-        # We read the label, transform into long tensor (needed by this loss function), pass to cuda device 
-        segclass = batch.y
-        label = segclass.type(torch.LongTensor).to(device) 
-
-        # The reshape is needed to pass from a (N, 1) shape (automatically appears when doing
-        # batch.y), to a (N) shape as we need; the output of the net is already (N, C) if it's properly built
-        loss = loss_fn(out, torch.reshape(label, (-1,)))
-        
-        # Back propagation (compute gradients of the loss with respect to the weights in the model)
+        # 2. Pass the data to the model
+        out = model.forward(batch) 
+        # Pick the desired target
+        label = torch.reshape(torch.tensor(batch[label_name], dtype = torch.long), (-1,)).to(device)
+        # 3. Compute the loss comparing the output of the model with the target
+        loss = loss_fn(out, label)
+        # 4. Back propagation (compute gradients of the loss with respect to the weights in the model)
         loss.backward()
-        # Gradient descent (update the optimizer)
+        # 5. Gradient descent (update the optimizer) (4)
         optimizer.step()
 
+        # sum loss to get at the end the average loss per epoch
         loss_epoch += loss.item()
 
+        # Compute the metrics with the metrics function 
+        true = label.detach().cpu().numpy() 
+        pred = out.argmax(dim=-1).detach().cpu().numpy()
+        met_epoch += metric_fn(true, pred)
 
-        pred = torch.reshape(out.argmax(dim=-1, keepdim=True), (-1,)).detach().cpu().numpy()
-        true = torch.reshape(segclass, (-1,)).detach().cpu().numpy() 
-
-        met_epoch += metric_fn(true, pred, nclass = nclass)
-    
+    # Average the loss and metrics for the whole epoch
     loss_epoch = loss_epoch / len(loader)
-    met_epoch  = met_epoch / len(loader)
+    met_epoch  = met_epoch  / len(loader)
+
+    # Print the values
     epoch_ = f"Train Epoch: {epoch_id}"
     loss_  = f"\t Loss: {loss_epoch:.6f}"
-    print(epoch_ + loss_)
-
+    met_   = f"\t Metr: {met_epoch:.6f}"
+    print(epoch_ + loss_ + met_)
+    
     return loss_epoch, met_epoch
 
 
-def valid_one_epoch(model, loader, device, loss_fn, label_type, nclass = 4, model_uses_batch = True):
+def valid_one_epoch(model, 
+                    loader, 
+                    device, 
+                    loss_fn, 
+                    label_type = LabelType.Classification, 
+                    nclass = 2):
     # Set the model to evaluate
     model.eval()
 
     loss_epoch = 0
-    metric_fn, met_epoch = metrics_selector(label_type, nclass)
+    metrics = Metrics(label_type, nclass = nclass)
+    label_name, met_epoch, metric_fn = metrics.label_name, metrics.met_epoch, metrics.metric_fn
 
+    # Freeze the gradients
     with torch.no_grad():
     # Iterate for the batches in the data loader
         for batch in loader:
-            # Put batch into device (cuda)
+            # Put batch into device (cpu/cuda)
             batch = batch.to(device)
-
-            if model_uses_batch:
-                out = model.forward(batch.x.type(torch.float), batch.edge_index, batch.batch)
-            else:
-                out = model.forward(batch.x.type(torch.float), batch.edge_index)
-
-            segclass = batch.y
-            label = segclass.type(torch.LongTensor).to(device) 
-
-            # The reshape is needed to pass from a (N, 1) shape (automatically appears when doing
-            # batch.y), to a (N) shape as we need; the output of the net is already (N, C) if it's properly built
-            loss = loss_fn(out, torch.reshape(label, (-1,)))
+            # Pass the data through the model
+            out = model.forward(batch)
+            # Get the target
+            label = torch.reshape(torch.tensor(batch[label_name], dtype = torch.long), (-1,)).to(device)
+            # Compute the loss
+            loss = loss_fn(out, label)
+            # sum loss to get at the end the average loss per epoch
             loss_epoch += loss.item()
 
-            # For each node set the maximum argument to pick a class
-            pred = torch.reshape(out.argmax(dim=-1, keepdim=True), (-1,)).detach().cpu().numpy()
-
-            #Once again, the labels are shifted by 1 to match the prediction positions (explained in train fun)
-            true = torch.reshape(segclass, (-1,)).detach().cpu().numpy() 
+            # compute the metrics
+            true = label.detach().cpu().numpy() 
+            pred = out.argmax(dim=-1).detach().cpu().numpy()
+            met_epoch += metric_fn(true, pred)
             
-            met_epoch += metric_fn(true, pred, nclass = nclass)
-            
-
         loss_epoch = loss_epoch / len(loader)
         met_epoch  = met_epoch / len(loader)
-        loss_ = f"\t Validation Loss: {loss_epoch:.6f}"
-        print(loss_)
+        loss_  = f"\t Validation Loss: {loss_epoch:.6f}"
+        met_   = f"\t Metr: {met_epoch:.6f}"
+        print(loss_, met_)
 
     return loss_epoch, met_epoch
 
@@ -143,30 +147,29 @@ def save_checkpoint(state, filename='checkpoint.pth.tar'):
 
 def train_net(*,
               nepoch,
-              train_data,
-              valid_data,
+              train_dataset,
+              valid_dataset,
               train_batch_size,
               valid_batch_size,
-              net,
+              num_workers,
+              model,
               device,
               optimizer,
               criterion,
-              label_type,
-              nclass,
-              model_uses_batch,
               checkpoint_dir,
               tensorboard_dir,
-              num_workers):
+              label_type = LabelType.Classification,
+              nclass = 2):
     """
         Trains the net nepoch times and saves the model anytime the validation loss decreases
     """
-    loader_train = DataLoader(train_data,
+    loader_train = DataLoader(train_dataset,
                             batch_size = train_batch_size,
                             shuffle = True,
                             num_workers = num_workers,
                             drop_last = True,
                             pin_memory = False)
-    loader_valid = DataLoader(valid_data,
+    loader_valid = DataLoader(valid_dataset,
                             batch_size = valid_batch_size,
                             shuffle = True,
                             num_workers = 1,
@@ -176,11 +179,11 @@ def train_net(*,
     start_loss = np.inf
     writer = SummaryWriter(tensorboard_dir)
     for i in range(nepoch):
-        train_loss, train_met = train_one_epoch(i, net, loader_train, device, optimizer, criterion, label_type, nclass = nclass, model_uses_batch = model_uses_batch)
-        valid_loss, valid_met = valid_one_epoch(net, loader_valid, device, criterion, label_type, nclass = nclass, model_uses_batch = model_uses_batch)
+        train_loss, train_met = train_one_epoch(i, model, loader_train, device, optimizer, criterion, label_type = label_type, nclass = nclass)
+        valid_loss, valid_met = valid_one_epoch(   model, loader_valid, device,            criterion, label_type = label_type, nclass = nclass)
 
         if valid_loss < start_loss:
-            save_checkpoint({'state_dict': net.state_dict(),
+            save_checkpoint({'state_dict': model.state_dict(),
                              'optimizer': optimizer.state_dict()}, f'{checkpoint_dir}/net_checkpoint_{i}.pth.tar')
             start_loss = valid_loss
 
@@ -197,7 +200,7 @@ def train_net(*,
         writer.flush()
     writer.close()
 
-def predict_gen(test_data, net, batch_size, device, model_uses_batch, label_type):
+def predict_gen(test_data, model, batch_size, device, label_type = LabelType.Classification, nclass = 2):
     loader_test = DataLoader(test_data,
                             batch_size = batch_size,
                             shuffle = False,
@@ -205,31 +208,34 @@ def predict_gen(test_data, net, batch_size, device, model_uses_batch, label_type
                             drop_last = False,
                             pin_memory = False)
     
-    net.eval()
+    model.eval()
     softmax = torch.nn.Softmax(dim = 1)
+    label_name = Metrics(label_type, nclass = nclass).label_name
     with torch.autograd.no_grad():
         for batch in loader_test:
             batch = batch.to(device)
 
-            if model_uses_batch:
-                out = net.forward(batch.x.type(torch.float), batch.edge_index, batch.batch) 
-            else:
-                out = net.forward(batch.x.type(torch.float), batch.edge_index)
+            out = model.forward(batch)
 
             y_pred = softmax(out).cpu().detach().numpy()
 
             if label_type == LabelType.Classification:
-                out_dict = dict(label = batch.y.cpu().detach().numpy(), 
-                                dataset_id = batch.dataset_id.cpu().detach.numpu(), 
+                out_dict = dict(file_id    = batch.fnum.detach().cpu().numpy(), 
+                                dataset_id = batch.dataset_id.detach().cpu().numpy(), 
+                                binclass   = batch[label_name], #already a list 
                                 prediction = y_pred)
                 
             elif label_type == LabelType.Segmentation:
-                _, lengths = np.unique(batch.batch.cpu().detach().numpy(), return_counts=True)
-                dataset_id = np.repeat(batch.dataset_id.cpu().detach().numpy(), lengths)
+                _, lengths = np.unique(batch.batch.detach().cpu().numpy(), return_counts=True)
+                dataset_id = np.repeat(batch.dataset_id.detach().cpu().numpy(), lengths)
+                file_id    = np.repeat(batch.fnum.detach().cpu().numpy(), lengths)
+                binclass   = np.repeat(batch.binclass, lengths)
 
-                out_dict = dict(dataset_id = dataset_id, 
-                                coords = batch.coords.cpu().detach().numpy(), 
-                                label  = batch.y.cpu().detach().numpy().flatten(), 
-                                energy = batch.x.cpu().detach().numpy().flatten(), 
+                out_dict = dict(file_id    = file_id,
+                                dataset_id = dataset_id, 
+                                binclass   = binclass,
+                                coords     = batch.coords.detach().cpu().numpy(), 
+                                energy     = batch.x[:,0].detach().cpu().numpy().flatten(), 
+                                label      = batch[label_name].detach().cpu().numpy().flatten(), 
                                 prediction = y_pred)
             yield out_dict
