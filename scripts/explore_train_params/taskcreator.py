@@ -68,7 +68,7 @@ if __name__ == "__main__":
             #create the config file to write the template on it
             config = train_path + "config_pred.conf"
             with open(config, "w") as config_write:
-                config_write(config_file.format(file_in = file_in, 
+                config_write.write(config_file.format(file_in = file_in, 
                                                     nconv = nconv, 
                                                     dropout = do, 
                                                     bs = bs, 
