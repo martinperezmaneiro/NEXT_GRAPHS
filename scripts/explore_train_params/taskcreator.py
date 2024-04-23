@@ -12,7 +12,7 @@ file_in = basedir + train_data
 
 train_folder_structure = 'neural_network/lr_{lr}_do_{do}_bs_{bs}_nconv_{nconv}/'
 train_dir = basedir + train_folder_structure
-prediction_file = train_dir + 'test_prediction.h5'
+prediction_file = 'test_prediction.h5'
 
 configTemp_path = '/home/usc/ie/mpm/NEXT_graphs/scripts/explore_train_params/'
 taskTemp = '/home/usc/ie/mpm/NEXT_graphs/templates/taskTemplate.sh'
@@ -61,6 +61,7 @@ if __name__ == "__main__":
                                                     check_dir = checkpoint_dir, 
                                                     tb_dir = tensorboard_dir))
         if action == 'predict':
+            prediction_path = train_path + prediction_file
             #search for the last checkpoint
             checkpoints = sorted(glob.glob(checkpoint_dir + '*.pth.tar'), key = lambda x: int(x.split('_')[-1].split('.')[0]))
             #open the template to use it
@@ -72,7 +73,7 @@ if __name__ == "__main__":
                                                     nconv = nconv, 
                                                     dropout = do, 
                                                     bs = bs, 
-                                                    out_file = prediction_file, 
+                                                    out_file = prediction_path, 
                                                     saved_weights = checkpoints[-1]))
 
         #we create the commands to be written in the job file, such as the scripth path
