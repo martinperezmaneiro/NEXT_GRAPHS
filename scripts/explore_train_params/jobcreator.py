@@ -10,6 +10,7 @@ from taskcreator import basedir
 
 task_dir = basedir + 'neural_network/*/'
 tasks_per_job = 10
+action = 'train'
 
 jobs_dir = basedir + 'neural_network/jobs/'
 logs_dir = basedir + 'neural_network/logs/'
@@ -18,11 +19,12 @@ job_temp = '/home/usc/ie/mpm/NEXT_graphs/templates/jobTemplate_ft3.sh'
 task_params = "srun --ntasks 1 --exclusive --cpus-per-task 1 "
 jobtime = "6:00:00"
 
+taskname = "task_train.sh" if action == 'train' else "task_pred.sh"
 
 if __name__ == "__main__":
     os.makedirs(jobs_dir)
     os.makedirs(logs_dir)
-    task_filenames = sorted(glob.glob(os.path.expandvars(task_dir + 'task.sh')))
+    task_filenames = sorted(glob.glob(os.path.expandvars(task_dir + taskname)))
 
     ntasks = len(task_filenames)
     nbatches = ceil(ntasks/tasks_per_job)
