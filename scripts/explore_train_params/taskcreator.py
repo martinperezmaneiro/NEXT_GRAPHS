@@ -1,4 +1,5 @@
 import os
+import glob
 import itertools
 
 
@@ -11,8 +12,9 @@ file_in = basedir + train_data
 
 train_folder_structure = 'neural_network/lr_{lr}_do_{do}_bs_{bs}_nconv_{nconv}/'
 train_dir = basedir + train_folder_structure
+prediction_file = train_dir + 'test_prediction.h5'
 
-configTemp = '/home/usc/ie/mpm/NEXT_graphs/scripts/explore_train_params/GCNClassTemplate.conf'
+configTemp_path = '/home/usc/ie/mpm/NEXT_graphs/scripts/explore_train_params/'
 taskTemp = '/home/usc/ie/mpm/NEXT_graphs/templates/taskTemplate.sh'
 script_dir = '/home/usc/ie/mpm/NEXT_graphs/scripts/main.py'
 
@@ -41,21 +43,37 @@ if __name__ == "__main__":
         train_path  = train_dir.format(lr = lr, do = do, bs = bs, nconv = nconv)
         checkpoint_dir  = train_path + 'checkpoint_dir/'
         tensorboard_dir = train_path + 'tensorboard_dir/'
-        os.makedirs(checkpoint_dir)
-        os.makedirs(tensorboard_dir)
+        if action == 'train':
+            os.makedirs(checkpoint_dir)
+            os.makedirs(tensorboard_dir)
 
-        #open the template to use it
-        config_file = open(configTemp).read()
-        #create the config file to write the template on it
-        config = train_path + "config.conf"
-        with open(config, "w") as config_write:
-            config_write.write(config_file.format(file_in = file_in, 
-                                                  nconv = nconv, 
-                                                  dropout = do, 
-                                                  lr = lr, 
-                                                  bs = bs, 
-                                                  check_dir = checkpoint_dir, 
-                                                  tb_dir = tensorboard_dir))
+            #open the template to use it
+            config_file = open(configTemp_path + 'GCNClassTemplate.conf').read()
+            #create the config file to write the template on it
+            config = train_path + "config_train.conf"
+            with open(config, "w") as config_write:
+        
+                config_write.write(config_file.format(file_in = file_in, 
+                                                    nconv = nconv, 
+                                                    dropout = do, 
+                                                    lr = lr, 
+                                                    bs = bs, 
+                                                    check_dir = checkpoint_dir, 
+                                                    tb_dir = tensorboard_dir))
+        if action == 'predict':
+            #search for the last checkpoint
+            checkpoints = sorted(glob.glob(checkpoint_dir + '*.pth.tar'), key = lambda x: int(x.split('_')[-1].split('.')[0]))
+            #open the template to use it
+            config_file = open(configTemp_path + 'GCNClassTemplate_pred.conf').read()
+            #create the config file to write the template on it
+            config = train_path + "config_pred.conf"
+            with open(config, "w") as config_write:
+                config_write(config_file.format(file_in = file_in, 
+                                                    nconv = nconv, 
+                                                    dropout = do, 
+                                                    bs = bs, 
+                                                    out_file = prediction_file, 
+                                                    saved_weights = checkpoints[-1]))
 
         #we create the commands to be written in the job file, such as the scripth path
         commands = "python {script_dir} -a {action} -conf {config_directory}".format(script_dir = script_dir,
@@ -64,7 +82,8 @@ if __name__ == "__main__":
 
         ######### CREATE TASKS (each one with one labelling command)############
         #create the task file to write the template on it
-        task = train_path + "task.sh"
+        taskname = "task_train.sh" if action == 'train' else "task_pred.sh"
+        task = train_path + taskname
         with open(task, "w") as task_write:
             task_write.write(task_file.format(commands = commands))
         os.chmod(task, 0o744) #I think this gives executable permises
