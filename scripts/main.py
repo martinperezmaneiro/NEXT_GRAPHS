@@ -101,6 +101,15 @@ if __name__ == '__main__':
                                      eps = params.eps,
                                      weight_decay = params.weight_decay)
         
+        if params.scheduler == 'ReduceLROnPlateau':
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 
+                                                                   factor = params.reduce_lr_factor, 
+                                                                   patience = params.patience, 
+                                                                   min_lr = params.min_lr)
+        if params.scheduler == None:
+            scheduler = None
+            
+        
         train_net(nepoch           = params.nepoch,
                   train_dataset    = train_data,
                   valid_dataset    = valid_data,
@@ -111,6 +120,7 @@ if __name__ == '__main__':
                   device           = device,
                   optimizer        = optimizer,
                   criterion        = criterion,
+                  scheduler        = scheduler,
                   checkpoint_dir   = params.checkpoint_dir,
                   tensorboard_dir  = params.tensorboard_dir,
                   label_type       = params.labeltype,

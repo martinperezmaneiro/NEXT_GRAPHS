@@ -1,9 +1,12 @@
 import sys
 import torch
+import inspect
 import numpy as np
 
 from torch_geometric.loader import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import torch.optim.lr_scheduler as lr_scheduler
+
 
 from .data_loader import LabelType
 
@@ -145,6 +148,16 @@ def valid_one_epoch(model,
 def save_checkpoint(state, filename='checkpoint.pth.tar'):
     torch.save(state, filename)
 
+def get_name_of_scheduler(scheduler):
+    """
+    Get the name of the scheduler.
+    """
+    for name, obj in lr_scheduler.__dict__.items():
+        if inspect.isclass(obj):
+            if isinstance(scheduler, obj):
+                return name
+    return None
+
 def train_net(*,
               nepoch,
               train_dataset,
@@ -156,6 +169,7 @@ def train_net(*,
               device,
               optimizer,
               criterion,
+              scheduler,
               checkpoint_dir,
               tensorboard_dir,
               label_type = LabelType.Classification,
@@ -181,6 +195,11 @@ def train_net(*,
     for i in range(nepoch):
         train_loss, train_met = train_one_epoch(i, model, loader_train, device, optimizer, criterion, label_type = label_type, nclass = nclass)
         valid_loss, valid_met = valid_one_epoch(   model, loader_valid, device,            criterion, label_type = label_type, nclass = nclass)
+        if scheduler:
+            if get_name_of_scheduler(scheduler) == 'ReduceLROnPlateau':
+                scheduler.step(valid_loss)
+            else:
+                scheduler.step()
 
         if valid_loss < start_loss:
             save_checkpoint({'state_dict': model.state_dict(),
@@ -197,6 +216,9 @@ def train_net(*,
         elif label_type == LabelType.Classification:
             writer.add_scalar('acc/train', train_met, i)
             writer.add_scalar('acc/valid', valid_met, i)
+        learning_rate = optimizer.param_groups[0]['lr']
+        writer.add_scalar('lr', learning_rate, i)
+        print('lr = ', learning_rate)
         writer.flush()
     writer.close()
 
