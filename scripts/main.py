@@ -78,7 +78,7 @@ if __name__ == '__main__':
     train_data, valid_data, test_data = dataset
 
     if params.saved_weights:
-        dct_weights = torch.load(params.saved_weights)['state_dict']
+        dct_weights = torch.load(params.saved_weights, map_location=torch.device(device))['state_dict']
         model.load_state_dict(dct_weights, strict = False)
         print('Weights loaded')
 
