@@ -79,8 +79,8 @@ if __name__ == '__main__':
 
     if params.saved_weights:
         dct_weights = torch.load(params.saved_weights, map_location=torch.device(device))['state_dict']
-        model.load_state_dict(dct_weights, strict = False)
-        print('Weights loaded')
+        load_status = model.load_state_dict(dct_weights, strict = False)
+        print('Weights loaded: ', load_status)
 
     if action == 'train':
         if params.weight_loss is True:
