@@ -4,8 +4,10 @@ import gzip
 import torch
 
 from invisible_cities.core.configure  import configure
-from create_dataset_jobs.production_variables import get_file_number
 from NEXT_graphNN.utils.data_loader import graphDataset
+
+
+get_file_number = lambda filename: int(filename.split("/")[-1].split("_")[-2])
 
 if __name__ == "__main__":
 
