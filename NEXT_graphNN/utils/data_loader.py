@@ -92,10 +92,14 @@ def graphData(event,
     #nvoxel features for the nodes
     features = event[feature_n]
     features = features / features.sum() if norm_features else features
+    
+    if 'cloud' in event.columns:
     #cloud features for the nodes
-    cloud_feat = get_cloud_ener_nhits(event, norm_features = norm_features)
-    #create the node features tensor joining both voxel and cloud features
-    nodes = torch.tensor(features.join(cloud_feat).values, dtype = torch_dtype)
+        cloud_feat = get_cloud_ener_nhits(event, norm_features = norm_features)
+        #create the node features tensor joining both voxel and cloud features
+        nodes = torch.tensor(features.join(cloud_feat).values, dtype = torch_dtype)
+    else:
+        nodes = torch.tensor(features.values, dtype = torch_dtype)
     #nodes segmentation label
     seg = event[label_n].values
     if simplify_segclass:
