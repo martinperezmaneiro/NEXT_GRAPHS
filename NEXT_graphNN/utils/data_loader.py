@@ -66,7 +66,8 @@ def edge_index(event,
                classic = False, 
                all_connected = False, 
                coord_names = ['xbin', 'ybin', 'zbin'], 
-               ener_name = 'ener'):
+               ener_name = 'ener',
+               torch_dtype = torch.float):
     ''' 
     The function uses KDTree algorithm to create edge tensors for the graphs.
     Edges can be created based on N nearest neighbours, using the classic 
@@ -115,7 +116,7 @@ def edge_index(event,
                 edge_weights.append(inve(dis))
         passed_nodes.append(i)
     # Transform into the required tensors
-    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features), torch.tensor(edge_weights)
+    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
     return edges, edge_features, edge_weights
 
 def graphData(event, 
@@ -146,7 +147,8 @@ def graphData(event,
                                                     classic = classic,
                                                     all_connected = all_connected,
                                                     coord_names = coord_names, 
-                                                    ener_name = feature_n[0])
+                                                    ener_name = feature_n[0], 
+                                                    torch_dtype=torch_dtype)
     #nvoxel features for the nodes
     features = event[feature_n]
     features = features / features.sum() if norm_features else features
