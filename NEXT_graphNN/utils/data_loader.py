@@ -6,6 +6,7 @@ import pandas as pd
 import os.path as osp
 from   glob import glob
 from   enum import auto
+from scipy.spatial import KDTree
 
 import invisible_cities.io.dst_io as dio
 from   invisible_cities.types.ic_types import AutoNameEnumBase
@@ -26,50 +27,108 @@ class NetArchitecture(AutoNameEnumBase):
     GraphUNet    = auto()
 
 
+# def edge_index(event, 
+#                max_distance = np.sqrt(3), 
+#                norm_features = True,
+#                ener_name = 'ener', 
+#                coord_names = ['xbin', 'ybin', 'zbin'], 
+#                directed = False, 
+#                fully_connected = False, 
+#                torch_dtype = torch.float):
+#     ''' 
+#     Creates the edge index tensor, with shape [2, E] where E is the number of edges.
+#     It contains the index of the nodes that are connected by an edge. 
+#     Also creates the edge features tensor, with shape [E, D] being D the number of features. In this case we add the distance, and a sort of gradient.
+#     Also creates the edge weights tensor, with shape E: one weight assigned to each edge. In this case we use the inverse of the distance. 
+#     '''
+#     def grad(ener, dis, i, j): return abs(ener[i] - ener[j]) / dis
+#     def inve(dis): return 1 / dis
+
+#     coord = event[coord_names].T
+#     ener  = event[ener_name]
+#     ener = ener / sum(ener) if norm_features else ener
+#     edges, edge_features, edge_weights = [], [], []
+#     node_comb = itertools.combinations if directed else itertools.permutations
+#     for i, j in node_comb(coord, 2):
+#         dis = np.linalg.norm(coord[i].values - coord[j].values)
+#         #append info for all edges if fully_connected, or if not, only the edges for the closest nodes
+#         if fully_connected or dis <= max_distance:
+#             edges.append([i, j])
+#             edge_features.append([dis, grad(ener, dis, i, j)])
+#             edge_weights.append(inve(dis))
+#     edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
+#     return edges, edge_features, edge_weights
+
 def edge_index(event, 
-               max_distance = np.sqrt(3), 
-               norm_features = True,
-               ener_name = 'ener', 
-               coord_names = ['xbin', 'ybin', 'zbin'], 
+               num_neigh, 
+               norm_features = True, 
                directed = False, 
-               fully_connected = False, 
-               torch_dtype = torch.float):
+               classic = False, 
+               all_connected = False, 
+               coord_names = ['xbin', 'ybin', 'zbin'], 
+               ener_name = 'ener'):
     ''' 
+    The function uses KDTree algorithm to create edge tensors for the graphs.
+    Edges can be created based on N nearest neighbours, using the classic 
+    approach or connecting all of them.
+    Classic approach is achieved fixing max_dist = sqrt(3) and num_neigh = 26.
+    To connect all, num_neigh = len(event) - 1 (to search for all the neighbors).
+
     Creates the edge index tensor, with shape [2, E] where E is the number of edges.
     It contains the index of the nodes that are connected by an edge. 
     Also creates the edge features tensor, with shape [E, D] being D the number of features. In this case we add the distance, and a sort of gradient.
     Also creates the edge weights tensor, with shape E: one weight assigned to each edge. In this case we use the inverse of the distance. 
     '''
+    # Functions for edge features
     def grad(ener, dis, i, j): return abs(ener[i] - ener[j]) / dis
     def inve(dis): return 1 / dis
 
-    coord = event[coord_names].T
-    ener  = event[ener_name]
+    # Fix values for different edge creations
+    max_dist = np.inf
+    if classic:
+        num_neigh = 26
+        max_dist = np.sqrt(3)
+    if all_connected:
+        num_neigh = len(event) - 1
+
+
+    voxels = [tuple(x) for x in event[coord_names].to_numpy()]
+    ener  = event[ener_name].values
     ener = ener / sum(ener) if norm_features else ener
     edges, edge_features, edge_weights = [], [], []
-    node_comb = itertools.combinations if directed else itertools.permutations
-    for i, j in node_comb(coord, 2):
-        dis = np.linalg.norm(coord[i].values - coord[j].values)
-        #append info for all edges if fully_connected, or if not, only the edges for the closest nodes
-        if fully_connected or dis <= max_distance:
-            edges.append([i, j])
-            edge_features.append([dis, grad(ener, dis, i, j)])
-            edge_weights.append(inve(dis))
-    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
+    
+    # Build the KD-Tree 
+    tree = KDTree(voxels)
+    # List to append the nodes we already looked into (to create direct graphs)
+    passed_nodes = []
+    for i, voxel in enumerate(voxels):
+        # For each voxel, get the N+1 neares neighbors (first one is the voxel itself)
+        distances, indices = tree.query(voxel, k=num_neigh+1)
+        # For each neighbor, add edges
+        for j, dis in zip(indices[1:], distances[1:]):  # Skip the first one (it's the voxel itself)
+            # Skip already passed nodes to create directed graphs
+            if directed and np.isin(passed_nodes, j).any(): continue 
+            # Condition for classical / all connected aproaches
+            if all_connected or dis <= max_dist:
+                edges.append([i, j])
+                edge_features.append([dis, grad(ener, dis, i, j)])
+                edge_weights.append(inve(dis))
+        passed_nodes.append(i)
+    # Transform into the required tensors
+    edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features), torch.tensor(edge_weights)
     return edges, edge_features, edge_weights
-
 
 def graphData(event, 
               data_id, 
-              feature_n = ['energy', 'nhits'], 
-              label_n = ['segclass'], 
+              num_neigh,
+              feature_n = ['energy'], 
+              label_n   = ['segclass'], 
               norm_features = True, 
-              max_distance = np.sqrt(3), 
-              ener_name = 'energy', 
-              coord_names = ['xbin', 'ybin', 'zbin'], 
               directed = False, 
-              fully_connected = False, 
-              simplify_segclass = False, 
+              classic = False,
+              all_connected = False,
+              coord_names = ['xbin', 'ybin', 'zbin'], 
+              simplify_segclass = False,
               torch_dtype = torch.float):
     '''
     Creates for an event the Data PyTorch geometric object with the edges, edge features (distances, 'gradient' with normalized energy), edge weights (inverse of distance),
@@ -80,15 +139,14 @@ def graphData(event,
         cloud_feat = event.merge(event.groupby('cloud').nhits.sum().rename('cloud_nhits'), left_on = 'cloud', how = 'left', right_index = True)[['cloud_ener', 'cloud_nhits']]
         return cloud_feat.divide(event[['ener', 'nhits']].sum().values, axis = 1) if norm_features else cloud_feat
     
-    event.reset_index(drop = True, inplace = True)
     edges, edge_features, edge_weights = edge_index(event, 
-                                                    max_distance=max_distance, 
+                                                    num_neigh,
                                                     norm_features = norm_features,
-                                                    ener_name=ener_name, 
-                                                    coord_names=coord_names, 
-                                                    directed=directed, 
-                                                    fully_connected=fully_connected, 
-                                                    torch_dtype = torch_dtype)
+                                                    directed = directed,
+                                                    classic = classic,
+                                                    all_connected = all_connected,
+                                                    coord_names = coord_names, 
+                                                    ener_name = feature_n[0])
     #nvoxel features for the nodes
     features = event[feature_n]
     features = features / features.sum() if norm_features else features
@@ -115,16 +173,16 @@ def graphData(event,
 
 def graphDataset(file, 
                  group = 'DATASET', 
-                 table = 'BeershebaVoxels',
-                 id_name = 'dataset_id', 
-                 feature_n = ['energy', 'nhits'], 
+                 table = 'BeershebaVoxels', 
+                 id_name = 'dataset_id',
+                 feature_n = ['energy'], 
                  label_n = ['segclass'], 
-                 norm_features = True,
-                 max_distance = np.sqrt(3), 
-                 ener_name = 'energy',
-                 coord_names = ['xbin', 'ybin', 'zbin'], 
-                 directed = False, 
-                 fully_connected = False, 
+                 norm_features = True, 
+                 num_neigh = 6,
+                 directed = False,
+                 classic = False,
+                 all_connected = False,
+                 coord_names = ['xbin', 'ybin', 'zbin'],  
                  simplify_segclass = False,
                  get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2]), 
                  torch_dtype = torch.float):
@@ -138,14 +196,14 @@ def graphDataset(file,
         event = event.reset_index(drop = True)
         graph_data = graphData(event, 
                                dat_id, 
+                               num_neigh,
                                feature_n=feature_n, 
                                label_n=label_n, 
                                norm_features = norm_features, 
-                               max_distance=max_distance, 
-                               ener_name = ener_name, 
+                               directed=directed,
+                               classic=classic,
+                               all_connected=all_connected,
                                coord_names=coord_names, 
-                               directed = directed, 
-                               fully_connected = fully_connected, 
                                simplify_segclass = simplify_segclass, 
                                torch_dtype = torch_dtype)
         #to avoid graphs where edges don't exist
