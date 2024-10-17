@@ -59,7 +59,8 @@ class NetArchitecture(AutoNameEnumBase):
 #     edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
 #     return edges, edge_features, edge_weights
 
-def edge_index(event, 
+def edge_index(dat_id, 
+               event, 
                num_neigh, 
                norm_features = True, 
                directed = False, 
@@ -107,6 +108,8 @@ def edge_index(event,
         distances, indices = tree.query(voxel, k=num_neigh+1)
         # For each neighbor, add edges
         for j, dis in zip(indices[1:], distances[1:]):  # Skip the first one (it's the voxel itself)
+            # Raise error if by any chance there are repeated voxels that might cause edge weights infinite
+            if dis == 0: raise ValueError('Repeated voxel {} in event {}'.format(voxel, dat_id))
             # Skip already passed nodes to create directed graphs
             if directed and np.isin(passed_nodes, j).any(): continue 
             # Condition for classical / all connected aproaches
@@ -120,7 +123,7 @@ def edge_index(event,
     return edges, edge_features, edge_weights
 
 def graphData(event, 
-              data_id, 
+              dat_id, 
               num_neigh,
               feature_n = ['energy'], 
               label_n   = ['segclass'], 
@@ -140,7 +143,8 @@ def graphData(event,
         cloud_feat = event.merge(event.groupby('cloud').nhits.sum().rename('cloud_nhits'), left_on = 'cloud', how = 'left', right_index = True)[['cloud_ener', 'cloud_nhits']]
         return cloud_feat.divide(event[['ener', 'nhits']].sum().values, axis = 1) if norm_features else cloud_feat
     
-    edges, edge_features, edge_weights = edge_index(event, 
+    edges, edge_features, edge_weights = edge_index(dat_id, 
+                                                    event, 
                                                     num_neigh,
                                                     norm_features = norm_features,
                                                     directed = directed,
@@ -170,7 +174,7 @@ def graphData(event,
     label = torch.tensor(seg - 1)
     coords = torch.tensor(event[coord_names].values)
     bincl = event.binclass.unique()[0]
-    graph_data = Data(x = nodes, edge_index = edges, edge_attr = edge_features, edge_weight = edge_weights, y = label, num_nodes = len(nodes), coords = coords, dataset_id = data_id, binclass = bincl)
+    graph_data = Data(x = nodes, edge_index = edges, edge_attr = edge_features, edge_weight = edge_weights, y = label, num_nodes = len(nodes), coords = coords, dataset_id = dat_id, binclass = bincl)
     return graph_data
 
 def graphDataset(file, 
