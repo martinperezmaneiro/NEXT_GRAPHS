@@ -245,6 +245,7 @@ def predict_gen(test_data, model, batch_size, device, label_type = LabelType.Cla
                 out_dict = dict(file_id    = batch.fnum.detach().cpu().numpy(), 
                                 dataset_id = batch.dataset_id.detach().cpu().numpy(), 
                                 binclass   = batch[label_name], #already a list 
+                                num_nodes  = batch.batch.bincount().detach().cpu().numpy(), #add number of nodes
                                 prediction = y_pred)
                 
             elif label_type == LabelType.Segmentation:
