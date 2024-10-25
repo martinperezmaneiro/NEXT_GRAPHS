@@ -8,7 +8,7 @@ import pandas as pd
 
 from argparse import ArgumentParser, Namespace
 
-from NEXT_graphNN.utils.data_loader import LabelType, NetArchitecture, weights_loss
+from NEXT_graphNN.utils.data_loader import LabelType, NetArchitecture, weights_loss, create_black_graph, create_seg_graph
 from NEXT_graphNN.utils.train_utils import train_net, predict_gen
 
 from NEXT_graphNN.networks.architectures import GCNClass, PoolGCNClass
@@ -58,6 +58,12 @@ if __name__ == '__main__':
     action = args.action
     params = get_params(confname)
 
+    dataset = torch.load(params.data_file)
+    if params.train_test_type == 'black'  : create_black_graph(dataset), params.init_features = 1, print('Dataset transformed into black image')
+    if params.train_test_type == 'seginfo': create_seg_graph(dataset),   params.init_features = 1, print('Dataset transformed into segmentation image')
+    train_data, valid_data, test_data = dataset
+    print('Loaded dataset')
+
     if params.netarch == NetArchitecture.GCNClass:
         model = GCNClass(params.init_features, 
                          params.nclass, 
@@ -73,9 +79,6 @@ if __name__ == '__main__':
                           params.pool_ratio).to(device)
     
     print('Net constructed')
-
-    dataset = torch.load(params.data_file)
-    train_data, valid_data, test_data = dataset
 
     if params.saved_weights:
         dct_weights = torch.load(params.saved_weights, map_location=torch.device(device))['state_dict']

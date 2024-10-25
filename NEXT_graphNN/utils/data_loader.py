@@ -381,3 +381,15 @@ def weights_loss(data, label_type, nclass = 3, nevents = None):
     elif label_type == LabelType.Classification:
         inv_freq = 1 / np.bincount([graph.binclass for graph in dataset])
     return inv_freq / sum(inv_freq)
+
+def create_black_graph(dataset):
+    for subdataset in dataset:
+        for event in subdataset:
+            event.x = torch.ones(event.num_nodes).reshape(-1, 1)
+    return
+
+def create_seg_graph(dataset):
+    for subdataset in dataset:
+        for event in subdataset:
+            event.x = event.y
+    return
