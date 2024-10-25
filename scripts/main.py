@@ -59,8 +59,17 @@ if __name__ == '__main__':
     params = get_params(confname)
 
     dataset = torch.load(params.data_file)
-    if params.train_test_type == 'black'  : create_black_graph(dataset), params.init_features = 1, print('Dataset transformed into black image')
-    if params.train_test_type == 'seginfo': create_seg_graph(dataset),   params.init_features = 1, print('Dataset transformed into segmentation image')
+
+    if params.train_test_type == 'black': 
+        create_black_graph(dataset) 
+        params.init_features = 1,
+        print('Dataset transformed into black image')
+
+    if params.train_test_type == 'seginfo': 
+        create_seg_graph(dataset),  
+        params.init_features = 1
+        print('Dataset transformed into segmentation image')
+        
     train_data, valid_data, test_data = dataset
     print('Loaded dataset')
 
