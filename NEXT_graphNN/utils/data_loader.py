@@ -391,5 +391,5 @@ def create_black_graph(dataset):
 def create_seg_graph(dataset):
     for subdataset in dataset:
         for event in subdataset:
-            event.x = event.y.float()
+            event.x = event.y.float() + 1
     return
