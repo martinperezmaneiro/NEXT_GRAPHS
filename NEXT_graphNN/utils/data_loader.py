@@ -59,6 +59,15 @@ class NetArchitecture(AutoNameEnumBase):
 #     edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
 #     return edges, edge_features, edge_weights
 
+def voxelize_sns(event, coord_names, new_coord_names):
+    for coord, newcoord in zip(coord_names, new_coord_names):
+        binsize = np.diff(sorted(event[coord].unique())).min()
+        min_ = event[coord].min()
+        max_ = event[coord].max()
+        bins = np.arange(min_ - binsize / 2, max_ + binsize + binsize / 2, binsize)
+        event[newcoord] = pd.cut(event[coord], bins = bins, labels = False)
+    return event
+
 def edge_index(dat_id, 
                event, 
                num_neigh, 
@@ -93,6 +102,12 @@ def edge_index(dat_id,
     if all_connected:
         num_neigh = len(event) - 1
 
+    # We are here voxelizing sensim tracks just for edge creations matter 
+    # (so that in the 3 dimensions the points are equidistant, as we have a grid of points)
+    if coord_names == ['x_sipm', 'y_sipm', 'z_slice']:
+        new_coord_names = ['xbin', 'ybin', 'zbin']
+        event = voxelize_sns(event, coord_names, new_coord_names)
+        coord_names = new_coord_names
 
     voxels = [tuple(x) for x in event[coord_names].to_numpy()]
     ener  = event[ener_name].values
