@@ -85,7 +85,6 @@ def edge_index(dat_id,
                all_connected = False, 
                coord_names = ['xbin', 'ybin', 'zbin'], 
                ener_name = 'ener',
-               rebin_z_sensim = False,
                torch_dtype = torch.float):
     ''' 
     The function uses KDTree algorithm to create edge tensors for the graphs.
@@ -110,13 +109,6 @@ def edge_index(dat_id,
         max_dist = np.sqrt(3)
     if all_connected:
         num_neigh = len(event) - 1
-
-    # We are here voxelizing sensim tracks just for edge creations matter 
-    # (so that in the 3 dimensions the points are equidistant, as we have a grid of points)
-    if coord_names == ['x_sipm', 'y_sipm', 'z_slice']:
-        new_coord_names = ['xbin', 'ybin', 'zbin']
-        event = voxelize_sns(event, coord_names, new_coord_names, rebin_z = rebin_z_sensim)
-        coord_names = new_coord_names
 
     voxels = [tuple(x) for x in event[coord_names].to_numpy()]
     ener  = event[ener_name].values
@@ -168,6 +160,14 @@ def graphData(event,
         cloud_feat = event.merge(event.groupby('cloud').nhits.sum().rename('cloud_nhits'), left_on = 'cloud', how = 'left', right_index = True)[['cloud_ener', 'cloud_nhits']]
         return cloud_feat.divide(event[['ener', 'nhits']].sum().values, axis = 1) if norm_features else cloud_feat
     
+    # We are here voxelizing sensim tracks just for edge creations matter 
+    # (so that in the 3 dimensions the points are equidistant, as we have a grid of points)
+    if coord_names == ['x_sipm', 'y_sipm', 'z_slice']:
+        new_coord_names = ['xbin', 'ybin', 'zbin']
+        event = voxelize_sns(event, coord_names, new_coord_names, rebin_z = rebin_z_sensim)
+        edge_coord_names = new_coord_names
+    else: edge_coord_names = coord_names
+
     edges, edge_features, edge_weights = edge_index(dat_id, 
                                                     event, 
                                                     num_neigh,
@@ -175,9 +175,8 @@ def graphData(event,
                                                     directed = directed,
                                                     classic = classic,
                                                     all_connected = all_connected,
-                                                    coord_names = coord_names, 
+                                                    coord_names = edge_coord_names, 
                                                     ener_name = feature_n[0], 
-                                                    rebin_z_sensim=rebin_z_sensim,
                                                     torch_dtype=torch_dtype)
     #nvoxel features for the nodes
     features = event[feature_n]
