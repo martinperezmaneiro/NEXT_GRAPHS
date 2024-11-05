@@ -59,13 +59,21 @@ class NetArchitecture(AutoNameEnumBase):
 #     edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
 #     return edges, edge_features, edge_weights
 
-def voxelize_sns(event, coord_names, new_coord_names):
+def voxelize_sns(event, coord_names, new_coord_names, rebin_z = True):
     for coord, newcoord in zip(coord_names, new_coord_names):
         binsize = np.diff(sorted(event[coord].unique())).min()
+        # make z bins 10x bigger
+        if (coord == 'z_slice') & rebin_z:
+            binsize = binsize * 10
         min_ = event[coord].min()
         max_ = event[coord].max()
         bins = np.arange(min_ - binsize / 2, max_ + binsize + binsize / 2, binsize)
-        event[newcoord] = pd.cut(event[coord], bins = bins, labels = False)
+        event[newcoord] = pd.cut(event[coord], bins = bins, labels = False).astype(int)
+    if rebin_z:
+        event = event.groupby(['event', 'xbin', 'ybin', 'zbin']).agg({'energy':'sum', 
+                                                                    'pes':'sum', 
+                                                                    'x_sipm':'mean', 'y_sipm':'mean', 'z_slice':'mean', 
+                                                                    'binclass':'max', 'segclass':'max'}).reset_index()
     return event
 
 def edge_index(dat_id, 
@@ -77,6 +85,7 @@ def edge_index(dat_id,
                all_connected = False, 
                coord_names = ['xbin', 'ybin', 'zbin'], 
                ener_name = 'ener',
+               rebin_z_sensim = False,
                torch_dtype = torch.float):
     ''' 
     The function uses KDTree algorithm to create edge tensors for the graphs.
@@ -106,7 +115,7 @@ def edge_index(dat_id,
     # (so that in the 3 dimensions the points are equidistant, as we have a grid of points)
     if coord_names == ['x_sipm', 'y_sipm', 'z_slice']:
         new_coord_names = ['xbin', 'ybin', 'zbin']
-        event = voxelize_sns(event, coord_names, new_coord_names)
+        event = voxelize_sns(event, coord_names, new_coord_names, rebin_z = rebin_z_sensim)
         coord_names = new_coord_names
 
     voxels = [tuple(x) for x in event[coord_names].to_numpy()]
@@ -148,6 +157,7 @@ def graphData(event,
               all_connected = False,
               coord_names = ['xbin', 'ybin', 'zbin'], 
               simplify_segclass = False,
+              rebin_z_sensim = False,
               torch_dtype = torch.float):
     '''
     Creates for an event the Data PyTorch geometric object with the edges, edge features (distances, 'gradient' with normalized energy), edge weights (inverse of distance),
@@ -167,6 +177,7 @@ def graphData(event,
                                                     all_connected = all_connected,
                                                     coord_names = coord_names, 
                                                     ener_name = feature_n[0], 
+                                                    rebin_z_sensim=rebin_z_sensim,
                                                     torch_dtype=torch_dtype)
     #nvoxel features for the nodes
     features = event[feature_n]
@@ -205,6 +216,7 @@ def graphDataset(file,
                  all_connected = False,
                  coord_names = ['xbin', 'ybin', 'zbin'],  
                  simplify_segclass = False,
+                 rebin_z_sensim = False,
                  get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2]), 
                  torch_dtype = torch.float):
     '''
@@ -226,6 +238,7 @@ def graphDataset(file,
                                all_connected=all_connected,
                                coord_names=coord_names, 
                                simplify_segclass = simplify_segclass, 
+                               rebin_z_sensim = rebin_z_sensim,
                                torch_dtype = torch_dtype)
         #to avoid graphs where edges don't exist
         if graph_data.edge_index.numel() == 0:

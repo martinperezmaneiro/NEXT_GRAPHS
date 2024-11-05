@@ -39,6 +39,7 @@ if __name__ == "__main__":
                            all_connected     = config.all_connected,
                            coord_names       = config.coord_names, 
                            simplify_segclass = config.simplify_segclass,
+                           rebin_z_sensim    = config.rebin_z_sensim,
                            get_fnum_function = get_file_number, 
                            torch_dtype       = torch_dtype)
     if config.compression:
