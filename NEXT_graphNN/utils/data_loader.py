@@ -24,6 +24,7 @@ class LabelType(AutoNameEnumBase):
 class NetArchitecture(AutoNameEnumBase):
     GCNClass     = auto()
     PoolGCNClass = auto()
+    DyResGEN     = auto()
     GraphUNet    = auto()
 
 

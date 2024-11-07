@@ -11,7 +11,7 @@ from argparse import ArgumentParser, Namespace
 from NEXT_graphNN.utils.data_loader import LabelType, NetArchitecture, weights_loss, create_black_graph, create_seg_graph
 from NEXT_graphNN.utils.train_utils import train_net, predict_gen
 
-from NEXT_graphNN.networks.architectures import GCNClass, PoolGCNClass
+from NEXT_graphNN.networks.architectures import GCNClass, PoolGCNClass, DyResGEN
 from torch_geometric.nn.models import GraphUNet
 
 def is_file(parser, arg):
@@ -79,6 +79,18 @@ if __name__ == '__main__':
                          params.nconv, 
                          mult_feat_per_conv = params.mult_feat_per_conv, 
                          dropout_prob = params.dropout_prob).to(device)
+    
+    if params.netarch == NetArchitecture.DyResGEN:
+        model = DyResGEN(params.init_features, 
+                         params.hidden_features, 
+                         params.nclass, 
+                         params.n_skip_layers, 
+                         aggr_fn = params.aggr_fn, 
+                         learn = params.learn_aggr_param, 
+                         edge_dim = params.num_edge_feat, 
+                         skip_name = params.skip_name, 
+                         dropout = params.dropout_prob, 
+                         pool_ratio = params.pool_ratio).to(device)
         
     if params.netarch == NetArchitecture.GraphUNet:
         model = GraphUNet(params.init_features, 

@@ -3,6 +3,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import TopKPooling, global_mean_pool
 from NEXT_graphNN.utils.data_loader import edge_tensor
 from NEXT_graphNN.networks.blocks import FullyConnectedLinearBlock, ConvNormBlock
+from NEXT_graphNN.networks.blocks import GENConvBlock, ReguBlock
 
 class GCNClass(torch.nn.Module):
     def __init__(self, input_dim, output_dim, nconv, mult_feat_per_conv = 2, dropout_prob = 0.5):
@@ -64,4 +65,34 @@ class PoolGCNClass(torch.nn.Module):
         for lin in self.linears[::-1]:
             x = lin(x)
             
+        return x
+    
+
+class DyResGEN(torch.nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, n_skip_layers, aggr_fn = 'softmax', learn = True, edge_dim = 2, skip_name = 'res+', dropout = 0.1, pool_ratio = 0.5):
+        super(DyResGEN, self).__init__()
+        
+        self.conv_layers = torch.nn.ModuleList([])
+        self.regu_layers = torch.nn.ModuleList([])
+        self.pool_layers = torch.nn.ModuleList([])
+        self.line_layers = torch.nn.ModuleList([])
+
+        for hid_dim in hidden_dim:
+            self.conv_layers.append(GENConvBlock(input_dim, hid_dim, n_skip_layers, aggr_fn = aggr_fn, learn = learn, edge_dim = edge_dim, skip_name = skip_name, dropout = dropout))
+            self.regu_layers.append(ReguBlock   (hid_dim, dropout))
+            self.pool_layers.append(TopKPooling (hid_dim, pool_ratio))
+            self.line_layers.append(FullyConnectedLinearBlock(hid_dim, output_dim, p = dropout))
+            input_dim  = hid_dim
+            output_dim = hid_dim
+
+    def forward(self, data):
+        x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
+
+        for i in range(len(self.conv_layers)):
+            x = self.conv_layers[i](x, edge_index, edge_attr)
+            x = self.regu_layers[i](x)
+            x, edge_index, edge_attr, batch, _, _ = self.pool_layers[i](x, edge_index, edge_attr, batch)
+        x = global_mean_pool(x, batch)
+        for linear in self.line_layers[::-1]:
+            x = linear(x)
         return x
