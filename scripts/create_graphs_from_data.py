@@ -37,6 +37,7 @@ if __name__ == "__main__":
                            directed          = config.directed,
                            classic           = config.classic,
                            all_connected     = config.all_connected,
+                           delaunay          = config.delaunay,
                            coord_names       = config.coord_names, 
                            simplify_segclass = config.simplify_segclass,
                            rebin_z_sensim    = config.rebin_z_sensim,

@@ -7,7 +7,7 @@ import networkx as nx
 import os.path as osp
 from   glob import glob
 from   enum import auto
-from scipy.spatial import KDTree
+from scipy.spatial import KDTree, Delaunay
 
 import invisible_cities.io.dst_io as dio
 from   invisible_cities.types.ic_types import AutoNameEnumBase
@@ -78,6 +78,50 @@ def voxelize_sns(event, coord_names, new_coord_names, rebin_z = True):
                                                                     'binclass':'max', 'segclass':'max'}).reset_index()
     return event
 
+def create_graph_nneigh(voxels, num_neigh, max_dist, dat_id, search_neigh = 20):
+    '''
+    Creates a graph using the nearest neighbors algorithm. Depending on the input values, it can 
+    create a graph connecting num_neigh for each node, a graph with all the touching voxels connected,
+    or a graph with all the voxels connected.
+    '''
+    # Build the KD-Tree for efficient neighbor search
+    tree = KDTree(voxels)
+    # Creates a graph to append the edges
+    G = nx.Graph()
+
+    for i, voxel in enumerate(voxels):
+        # For each voxel, get the N+1 neares neighbors (first one is the voxel itself)
+        # To ensure always getting the same result, we have to increase the number of neighbours that
+        # the KDTree searches, and then selecting only the ones we are interested
+        distances, indices = tree.query(voxel, k = search_neigh+1)
+        
+        # For each neighbor, add edges. Skip the first one (it's the voxel itself) and pick only the desired num_neigh
+        for j, dis in zip(indices[1:num_neigh + 1], distances[1:num_neigh + 1]):  
+            # Raise error if by any chance there are repeated voxels that might cause edge weights infinite
+            if dis == 0: raise ValueError('Repeated voxel {} in event {}'.format(voxel, dat_id))
+            # Condition for classical approach
+            if dis <= max_dist:
+                G.add_edge(i, j, d = dis)
+    return G
+
+def create_graph_delaunay(voxels, dat_id):
+    '''
+    Creates a graph connecting the nodes from the Delaunay triangulation.
+    '''
+    # Compute Delaunay triangulation
+    triang = Delaunay(voxels)
+    # Initialize the graph
+    G = nx.Graph()
+
+    for simplex in triang.simplices:
+        # Each simplex is a tetrahedron (list of four indices), we create an edge between each pair of points in the tetrahedron
+        for (i, j) in itertools.combinations(simplex, 2):
+            dis = np.linalg.norm(np.array(voxels[i]) - np.array(voxels[j]))
+            # Raise error if by any chance there are repeated voxels that might cause edge weights infinite
+            if dis == 0: raise ValueError('Repeated voxel in event {}'.format(dat_id))
+            G.add_edge(i, j, d = dis)
+    return G
+
 def graph_to_tensor(G, energy, directed = False):
     '''
     Transforms a networkx graph into tensors to use with pytorch geometric
@@ -112,6 +156,7 @@ def edge_index(dat_id,
                directed = False, 
                classic = False, 
                all_connected = False, 
+               delaunay = False,
                coord_names = ['xbin', 'ybin', 'zbin'], 
                ener_name = 'ener',
                torch_dtype = torch.float, 
@@ -145,23 +190,10 @@ def edge_index(dat_id,
     ener  = event[ener_name].values
     ener = ener / sum(ener) if norm_features else ener
     
-    # Build the KD-Tree 
-    tree = KDTree(voxels)
-    # Creates a graph to append the edges
-    G = nx.Graph()
-
-    for i, voxel in enumerate(voxels):
-        # For each voxel, get the N+1 neares neighbors (first one is the voxel itself)
-        # To ensure always getting the same result, we have to increase the number of neighbours the KDTree searches
-        distances, indices = tree.query(voxel, k = search_neigh + 1)
-
-        # For each neighbor, add edges. Skip the first one (it's the voxel itself) and pick only the desired num_neigh
-        for j, dis in zip(indices[1:num_neigh + 1], distances[1: num_neigh + 1]):  
-            # Raise error if by any chance there are repeated voxels that might cause edge weights infinite
-            if dis == 0: raise ValueError('Repeated voxel {} in event {}'.format(voxel, dat_id))
-            # Condition for classical / all connected aproaches
-            if all_connected or dis <= max_dist:
-                G.add_edge(i, j, d = dis)
+    if delaunay:
+        G = create_graph_delaunay(voxels, dat_id)
+    else:
+        G = create_graph_nneigh(voxels, num_neigh, max_dist, dat_id, search_neigh = search_neigh)
                 
     # Create the edge lists using the graph
     edges, edge_features, edge_weights = graph_to_tensor(G, ener, directed = directed)
@@ -179,6 +211,7 @@ def graphData(event,
               directed = False, 
               classic = False,
               all_connected = False,
+              delaunay = False,
               coord_names = ['xbin', 'ybin', 'zbin'], 
               simplify_segclass = False,
               rebin_z_sensim = False,
@@ -208,6 +241,7 @@ def graphData(event,
                                                     directed = directed,
                                                     classic = classic,
                                                     all_connected = all_connected,
+                                                    delaunay = delaunay,
                                                     coord_names = edge_coord_names, 
                                                     ener_name = feature_n[0], 
                                                     torch_dtype = torch_dtype, 
@@ -247,6 +281,7 @@ def graphDataset(file,
                  directed = False,
                  classic = False,
                  all_connected = False,
+                 delaunay = False,
                  coord_names = ['xbin', 'ybin', 'zbin'],  
                  simplify_segclass = False,
                  rebin_z_sensim = False,
@@ -270,6 +305,7 @@ def graphDataset(file,
                                directed=directed,
                                classic=classic,
                                all_connected=all_connected,
+                               delaunay=delaunay,
                                coord_names=coord_names, 
                                simplify_segclass = simplify_segclass, 
                                rebin_z_sensim = rebin_z_sensim,
