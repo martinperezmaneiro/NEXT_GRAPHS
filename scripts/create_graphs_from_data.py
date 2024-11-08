@@ -41,7 +41,8 @@ if __name__ == "__main__":
                            simplify_segclass = config.simplify_segclass,
                            rebin_z_sensim    = config.rebin_z_sensim,
                            get_fnum_function = get_file_number, 
-                           torch_dtype       = torch_dtype)
+                           torch_dtype       = torch_dtype, 
+                           search_neigh      = config.search_neigh)
     if config.compression:
         with gzip.open(fileout, 'wb') as fout:
             torch.save(dataset, fout)

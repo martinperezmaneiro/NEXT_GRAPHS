@@ -3,6 +3,7 @@ import random
 import itertools
 import numpy as np
 import pandas as pd
+import networkx as nx
 import os.path as osp
 from   glob import glob
 from   enum import auto
@@ -77,6 +78,33 @@ def voxelize_sns(event, coord_names, new_coord_names, rebin_z = True):
                                                                     'binclass':'max', 'segclass':'max'}).reset_index()
     return event
 
+def graph_to_tensor(G, energy, directed = False):
+    '''
+    Transforms a networkx graph into tensors to use with pytorch geometric
+    '''
+    # Functions for edge features
+    def grad(ener, dis, i, j): return abs(ener[i] - ener[j]) / dis
+    def inve(dis): return 1 / dis
+    
+    # For undirected graphs, we need to double the features
+    edges, edge_features, edge_weights = [], [], []
+    for i, j in G.edges():
+        dis = G.edges[(i, j)]['d']
+        edge_feat_info = [dis, grad(energy, dis, i, j)] #grad is the same (i, j) as (j, i)
+        inv_dist = inve(dis)
+
+        if directed:
+            edges.extend([i, j])
+            factor = 1
+        else:
+            edges.extend([[i, j], [j, i]])
+            factor = 2
+
+        edge_features.extend([edge_feat_info] * factor)
+        edge_weights.extend([inv_dist] * factor)
+        
+    return edges, edge_features, edge_weights
+
 def edge_index(dat_id, 
                event, 
                num_neigh, 
@@ -86,7 +114,8 @@ def edge_index(dat_id,
                all_connected = False, 
                coord_names = ['xbin', 'ybin', 'zbin'], 
                ener_name = 'ener',
-               torch_dtype = torch.float):
+               torch_dtype = torch.float, 
+               search_neigh = 20):
     ''' 
     The function uses KDTree algorithm to create edge tensors for the graphs.
     Edges can be created based on N nearest neighbours, using the classic 
@@ -99,9 +128,6 @@ def edge_index(dat_id,
     Also creates the edge features tensor, with shape [E, D] being D the number of features. In this case we add the distance, and a sort of gradient.
     Also creates the edge weights tensor, with shape E: one weight assigned to each edge. In this case we use the inverse of the distance. 
     '''
-    # Functions for edge features
-    def grad(ener, dis, i, j): return abs(ener[i] - ener[j]) / dis
-    def inve(dis): return 1 / dis
 
     # Fix values for different edge creations
     max_dist = np.inf
@@ -110,31 +136,36 @@ def edge_index(dat_id,
         max_dist = np.sqrt(3)
     if all_connected:
         num_neigh = len(event) - 1
-
+    
+    # Ensure num_neigh is always <= search_neigh
+    if num_neigh > search_neigh:
+        search_neigh = num_neigh
+    
     voxels = [tuple(x) for x in event[coord_names].to_numpy()]
     ener  = event[ener_name].values
     ener = ener / sum(ener) if norm_features else ener
-    edges, edge_features, edge_weights = [], [], []
     
     # Build the KD-Tree 
     tree = KDTree(voxels)
-    # List to append the nodes we already looked into (to create direct graphs)
-    passed_nodes = []
+    # Creates a graph to append the edges
+    G = nx.Graph()
+
     for i, voxel in enumerate(voxels):
         # For each voxel, get the N+1 neares neighbors (first one is the voxel itself)
-        distances, indices = tree.query(voxel, k=num_neigh+1)
-        # For each neighbor, add edges
-        for j, dis in zip(indices[1:], distances[1:]):  # Skip the first one (it's the voxel itself)
+        # To ensure always getting the same result, we have to increase the number of neighbours the KDTree searches
+        distances, indices = tree.query(voxel, k = search_neigh + 1)
+
+        # For each neighbor, add edges. Skip the first one (it's the voxel itself) and pick only the desired num_neigh
+        for j, dis in zip(indices[1:num_neigh + 1], distances[1: num_neigh + 1]):  
             # Raise error if by any chance there are repeated voxels that might cause edge weights infinite
             if dis == 0: raise ValueError('Repeated voxel {} in event {}'.format(voxel, dat_id))
-            # Skip already passed nodes to create directed graphs
-            if directed and np.isin(passed_nodes, j).any(): continue 
             # Condition for classical / all connected aproaches
             if all_connected or dis <= max_dist:
-                edges.append([i, j])
-                edge_features.append([dis, grad(ener, dis, i, j)])
-                edge_weights.append(inve(dis))
-        passed_nodes.append(i)
+                G.add_edge(i, j, d = dis)
+                
+    # Create the edge lists using the graph
+    edges, edge_features, edge_weights = graph_to_tensor(G, ener, directed = directed)
+
     # Transform into the required tensors
     edges, edge_features, edge_weights = torch.tensor(edges, dtype = torch.long).T, torch.tensor(edge_features, dtype = torch_dtype), torch.tensor(edge_weights, dtype = torch_dtype)
     return edges, edge_features, edge_weights
@@ -151,7 +182,8 @@ def graphData(event,
               coord_names = ['xbin', 'ybin', 'zbin'], 
               simplify_segclass = False,
               rebin_z_sensim = False,
-              torch_dtype = torch.float):
+              torch_dtype = torch.float, 
+              search_neigh = 20):
     '''
     Creates for an event the Data PyTorch geometric object with the edges, edge features (distances, 'gradient' with normalized energy), edge weights (inverse of distance),
     node features (normalized energy and normalized number of hits per voxel), label, number of nodes, coords, dataset ID and binclass.
@@ -178,7 +210,8 @@ def graphData(event,
                                                     all_connected = all_connected,
                                                     coord_names = edge_coord_names, 
                                                     ener_name = feature_n[0], 
-                                                    torch_dtype=torch_dtype)
+                                                    torch_dtype = torch_dtype, 
+                                                    search_neigh = search_neigh)
     #nvoxel features for the nodes
     features = event[feature_n]
     features = features / features.sum() if norm_features else features
@@ -218,7 +251,8 @@ def graphDataset(file,
                  simplify_segclass = False,
                  rebin_z_sensim = False,
                  get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2]), 
-                 torch_dtype = torch.float):
+                 torch_dtype = torch.float, 
+                 search_neigh = 20):
     '''
     For a file, it creates a dataset with all the events in their input to the GNN form
     '''
@@ -239,7 +273,8 @@ def graphDataset(file,
                                coord_names=coord_names, 
                                simplify_segclass = simplify_segclass, 
                                rebin_z_sensim = rebin_z_sensim,
-                               torch_dtype = torch_dtype)
+                               torch_dtype = torch_dtype, 
+                               search_neigh = search_neigh)
         #to avoid graphs where edges don't exist
         if graph_data.edge_index.numel() == 0:
             continue
