@@ -215,6 +215,7 @@ def graphData(event,
               coord_names = ['xbin', 'ybin', 'zbin'], 
               simplify_segclass = False,
               rebin_z_sensim = False,
+              cloud_info = False,
               torch_dtype = torch.float, 
               search_neigh = 20):
     '''
@@ -250,7 +251,7 @@ def graphData(event,
     features = event[feature_n]
     features = features / features.sum() if norm_features else features
     
-    if 'cloud' in event.columns:
+    if ('cloud' in event.columns) & cloud_info:
     #cloud features for the nodes
         cloud_feat = get_cloud_ener_nhits(event, norm_features = norm_features)
         #create the node features tensor joining both voxel and cloud features
@@ -285,6 +286,7 @@ def graphDataset(file,
                  coord_names = ['xbin', 'ybin', 'zbin'],  
                  simplify_segclass = False,
                  rebin_z_sensim = False,
+                 cloud_info = False,
                  get_fnum_function = lambda filename: int(filename.split("/")[-1].split("_")[-2]), 
                  torch_dtype = torch.float, 
                  search_neigh = 20):
@@ -309,6 +311,7 @@ def graphDataset(file,
                                coord_names=coord_names, 
                                simplify_segclass = simplify_segclass, 
                                rebin_z_sensim = rebin_z_sensim,
+                               cloud_info = cloud_info,
                                torch_dtype = torch_dtype, 
                                search_neigh = search_neigh)
         #to avoid graphs where edges don't exist

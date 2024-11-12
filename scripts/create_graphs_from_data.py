@@ -41,6 +41,7 @@ if __name__ == "__main__":
                            coord_names       = config.coord_names, 
                            simplify_segclass = config.simplify_segclass,
                            rebin_z_sensim    = config.rebin_z_sensim,
+                           cloud_info        = config.cloud_info,
                            get_fnum_function = get_file_number, 
                            torch_dtype       = torch_dtype, 
                            search_neigh      = config.search_neigh)
