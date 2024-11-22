@@ -488,6 +488,7 @@ def create_black_graph(dataset):
     for subdataset in dataset:
         for event in subdataset:
             event.x = torch.ones(event.num_nodes).reshape(-1, 1)
+            event.edge_attr = event.edge_attr[:, 0].reshape(-1, 1) #select only distances, removing gradient from edge info
     return
 
 def create_seg_graph(dataset):
