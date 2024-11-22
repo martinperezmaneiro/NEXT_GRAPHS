@@ -242,18 +242,21 @@ def predict_gen(test_data, model, batch_size, device, label_type = LabelType.Cla
             y_pred = softmax(out).cpu().detach().numpy()
 
             if label_type == LabelType.Classification:
-                mean_xbin, mean_ybin, mean_zbin = torch.stack([data.coords.float().mean(axis = 0) for data in batch.to_data_list()]).t().tolist()
-                maxE_xbin, maxE_ybin, maxE_zbin = torch.stack([data.coords[data.x[:, 0].argmax()] for data in batch.to_data_list()]).t().tolist()
+                batch_data = batch.to_data_list()
+                mean_xbin, mean_ybin, mean_zbin = torch.stack([data.coords.float().mean(axis = 0) for data in batch_data]).t().tolist()
+                maxE_xbin, maxE_ybin, maxE_zbin = torch.stack([data.coords[data.x[:, 0].argmax()] for data in batch_data]).t().tolist()
                 out_dict = dict(file_id    = batch.fnum.detach().cpu().numpy(), 
                                 dataset_id = batch.dataset_id.detach().cpu().numpy(), 
                                 binclass   = batch[label_name], #already a list 
                                 num_nodes  = batch.batch.bincount().detach().cpu().numpy(), #add number of nodes
+                                num_edges  = [len(data.edge_index[0]) for data in batch.to_data_list()], #add number of edges
                                 mean_xbin  = mean_xbin,
                                 mean_ybin  = mean_ybin,
                                 mean_zbin  = mean_zbin,
                                 maxE_xbin  = maxE_xbin, 
                                 maxE_ybin  = maxE_ybin,
                                 maxE_zbin  = maxE_zbin,
+                                mean_dist  = [data.edge_attr.mean(axis = 0)[0].item() for data in batch_data],
                                 prediction = y_pred)
                 
             elif label_type == LabelType.Segmentation:
